@@ -19,6 +19,23 @@ Work through it in this order:
 | 7 | `exercises.py` | 12 practice tasks with a built-in self-test |
 | 8 | `solutions.py` | Worked answers (open only after trying!) |
 | 9 | `quiz.md` | Exam-style written questions + mark-scheme answers |
+| 10 | `game.py` | **Array Arcade** — six drills, three lives, scored |
+
+### Play it
+
+The same six drills exist twice. In the terminal:
+
+```bash
+python3 b2_2_lists_and_arrays/game.py
+```
+
+In a browser — click the boxes, trace the loops, pick the buggy line:
+**[Array Arcade](https://claude.ai/artifact/PxTFC9T4FxVeJCtEidnsMC)**
+(source in [`game/array-arcade.html`](game/array-arcade.html), which also runs
+if you just open the file).
+
+Both keep score, take a life for every wrong answer, explain the answer before
+you move on, and finish by naming the file you should re-read.
 
 ### How to run
 

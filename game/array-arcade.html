@@ -1,0 +1,1230 @@
+<title>Array Arcade</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one-screen app — status bar, centred stage, answer rail, feedback slab.
+   Light = squared exercise paper, ink and red pen. Dark = blackboard and chalk. */
+:root{
+  --paper:#f3f5ef; --grid:#d6e0d8; --rule:#b4c3bc;
+  --ink:#19282a; --ink-soft:#5d6f6b;
+  --pen:#c3362a; --accent:#1d4f86;
+  --good:#1c7a52; --bad:#c3362a;
+  --cell:#fffffe; --cell-edge:#9fb0aa; --cell-hi:#e6ede8;
+  --slab:#ffffff; --shadow:0 1px 0 rgba(25,40,42,.16);
+  --font-display:"Archivo Black","Trebuchet MS",Impact,sans-serif;
+  --font-body:"IBM Plex Sans",-apple-system,"Segoe UI",sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#151c1a; --grid:#222d29; --rule:#33403b;
+    --ink:#e9efe8; --ink-soft:#9aada6;
+    --pen:#f08a74; --accent:#86bdf5;
+    --good:#74d3a1; --bad:#f08a74;
+    --cell:#1e2724; --cell-edge:#49564f; --cell-hi:#2a3530;
+    --slab:#1b2320; --shadow:0 1px 0 rgba(0,0,0,.45);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#151c1a; --grid:#222d29; --rule:#33403b;
+  --ink:#e9efe8; --ink-soft:#9aada6;
+  --pen:#f08a74; --accent:#86bdf5;
+  --good:#74d3a1; --bad:#f08a74;
+  --cell:#1e2724; --cell-edge:#49564f; --cell-hi:#2a3530;
+  --slab:#1b2320; --shadow:0 1px 0 rgba(0,0,0,.45);
+  color-scheme:dark;
+}
+
+*{box-sizing:border-box}
+/* the publish skeleton supplies this; repeat it so the file also works
+   when it is opened straight from the repo as a local page */
+[hidden]{display:none!important}
+html,body{min-height:100%}
+body{
+  margin:0; font-family:var(--font-body); color:var(--ink);
+  background-color:var(--paper);
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size:26px 26px;
+  -webkit-text-size-adjust:100%;
+}
+.wrap{max-width:860px; margin:0 auto; padding-inline:16px; padding-block:14px 40px}
+code,kbd{font-family:var(--font-mono); font-size:.94em}
+b{font-weight:600}
+
+/* ---------- status bar ---------- */
+.bar{
+  display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+  padding-bottom:10px; margin-bottom:16px; border-bottom:2px solid var(--rule);
+}
+.mark{
+  font-family:var(--font-display); font-size:clamp(17px,4.4vw,22px);
+  letter-spacing:-.02em; margin:0; line-height:1;
+}
+.mark span{color:var(--pen)}
+.bar .spacer{flex:1 1 auto; min-width:0}
+.gauges{display:flex; align-items:center; gap:14px}
+.gauge{display:flex; flex-direction:column; align-items:flex-end; line-height:1.1}
+.gauge .k{font-size:9.5px; letter-spacing:.11em; text-transform:uppercase; color:var(--ink-soft)}
+.gauge .v{font-family:var(--font-display); font-size:19px; font-variant-numeric:tabular-nums}
+.lives{display:flex; gap:4px}
+.life{
+  width:15px; height:15px; border:2px solid var(--ink); border-radius:2px;
+  background:var(--cell); position:relative;
+}
+.life.spent{border-color:var(--pen); background:transparent}
+.life.spent::after{
+  content:"✕"; position:absolute; inset:-5px 0 0; color:var(--pen);
+  font-size:15px; font-weight:700; text-align:center; line-height:1;
+}
+
+/* ---------- menu ---------- */
+.lede{max-width:60ch; color:var(--ink-soft); font-size:14.5px; line-height:1.55; margin:0 0 18px}
+.lede b{color:var(--ink)}
+.drills{display:grid; grid-template-columns:repeat(auto-fit,minmax(224px,1fr)); gap:10px; margin:0 0 14px}
+.drill{
+  display:flex; flex-direction:column; gap:6px; text-align:left;
+  padding:13px 14px 12px; border:2px solid var(--rule); border-radius:3px;
+  background:var(--slab); color:inherit; font:inherit; cursor:pointer;
+  box-shadow:var(--shadow); min-width:0;
+}
+.drill:hover{border-color:var(--accent)}
+.drill .chip{
+  font-family:var(--font-mono); font-size:11.5px; font-weight:600; color:var(--pen);
+}
+.drill h3{margin:0; font-size:15.5px; font-weight:600; letter-spacing:-.01em}
+.drill p{margin:0; font-size:12.8px; line-height:1.45; color:var(--ink-soft)}
+.drill .best{
+  margin-top:2px; font-family:var(--font-mono); font-size:11px; color:var(--ink-soft);
+  font-variant-numeric:tabular-nums;
+}
+.drill.boss{border-color:var(--pen)}
+.drill.boss .chip{color:var(--accent)}
+.foot{font-size:12.5px; color:var(--ink-soft); line-height:1.6; margin:18px 0 0}
+.foot code{color:var(--ink)}
+
+/* ---------- play ---------- */
+.hdr{display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin-bottom:12px}
+.hdr h2{margin:0; font-size:15px; font-weight:600}
+.hdr .count{font-family:var(--font-mono); font-size:12px; color:var(--ink-soft); font-variant-numeric:tabular-nums}
+.hdr .quit{
+  margin-left:auto; background:none; border:0; padding:4px 0; cursor:pointer;
+  font:inherit; font-size:12.5px; color:var(--ink-soft); text-decoration:underline;
+}
+.hdr .quit:hover{color:var(--pen)}
+.ask{
+  font-size:clamp(15.5px,3.6vw,18px); line-height:1.45; margin:0 0 18px;
+  text-wrap:balance; max-width:58ch;
+}
+.ask code{
+  background:var(--cell-hi); border:1px solid var(--cell-edge); border-radius:2px;
+  padding:1px 4px; white-space:nowrap;
+}
+
+.stage{margin-bottom:18px}
+.varname{font-family:var(--font-mono); font-size:12.5px; color:var(--ink-soft); margin-bottom:7px}
+
+/* 1-D strip */
+.strip{display:flex; flex-wrap:wrap; gap:5px}
+.slot{display:flex; flex-direction:column; align-items:center; gap:4px}
+.cell{
+  width:clamp(38px,10.4vw,58px); height:clamp(38px,10.4vw,58px);
+  display:grid; place-items:center; padding:0;
+  font-family:var(--font-mono); font-size:clamp(13px,3.2vw,16px); font-weight:600;
+  color:var(--ink); background:var(--cell);
+  border:2px solid var(--cell-edge); border-radius:2px;
+  cursor:pointer; position:relative; transition:transform .1s, border-color .1s, background .1s;
+}
+.cell:hover:not(:disabled){border-color:var(--accent); background:var(--cell-hi)}
+.cell:disabled{cursor:default}
+.cell.on{border-color:var(--accent); background:var(--cell-hi); box-shadow:inset 0 0 0 2px var(--accent)}
+.cell.right{border-color:var(--good); background:var(--cell-hi); animation:pop .28s ease-out}
+.cell.right::after{
+  content:"✓"; position:absolute; top:-9px; right:-6px; color:var(--good);
+  font-size:17px; font-weight:700; line-height:1;
+}
+.cell.wrong{border-color:var(--pen); animation:shake .3s}
+.cell.wrong::after{
+  content:"✕"; position:absolute; inset:0; display:grid; place-items:center;
+  color:var(--pen); font-size:26px; font-weight:700; opacity:.85;
+}
+.idx{
+  font-family:var(--font-mono); font-size:11px; color:var(--ink-soft);
+  font-variant-numeric:tabular-nums;
+}
+.idx.hidden{color:var(--rule)}
+
+/* 2-D grid */
+.grid2d{display:grid; gap:5px; justify-content:center; margin-inline:auto; width:max-content; max-width:100%}
+.hd{
+  font-family:var(--font-mono); font-size:11px; color:var(--ink-soft);
+  display:grid; place-items:center; font-variant-numeric:tabular-nums;
+}
+
+/* code */
+.code{
+  margin:0; overflow-x:auto; background:var(--slab); border:2px solid var(--rule);
+  border-radius:3px; padding:11px 0;
+}
+.cline{
+  display:flex; gap:12px; align-items:baseline; width:100%; text-align:left;
+  font-family:var(--font-mono); font-size:clamp(12.2px,3vw,13.6px); line-height:1.75;
+  background:none; border:0; color:var(--ink); padding:1px 13px; white-space:pre;
+}
+button.cline{cursor:pointer}
+button.cline:hover{background:var(--cell-hi)}
+.cline .n{
+  color:var(--ink-soft); font-size:10.5px; min-width:1.3em; text-align:right;
+  flex:0 0 auto; user-select:none;
+}
+.cline.right{background:color-mix(in srgb, var(--good) 16%, transparent); box-shadow:inset 3px 0 0 var(--good)}
+.cline.wrong{background:color-mix(in srgb, var(--pen) 14%, transparent); box-shadow:inset 3px 0 0 var(--pen)}
+.kw{color:var(--accent); font-weight:600}
+.nu{color:var(--pen)}
+.st{color:var(--good)}
+
+/* answers */
+.opts{display:grid; gap:7px; grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.opt{
+  padding:12px 13px; border:2px solid var(--cell-edge); border-radius:2px;
+  background:var(--slab); color:inherit; cursor:pointer; text-align:left;
+  font-family:var(--font-mono); font-size:14px; font-weight:600; min-width:0;
+  word-break:break-word; box-shadow:var(--shadow);
+}
+.opt.prose{font-family:var(--font-body); font-size:14.5px; font-weight:500}
+.opt:hover:not(:disabled){border-color:var(--accent); background:var(--cell-hi)}
+.opt:disabled{cursor:default}
+.opt.right{border-color:var(--good); background:color-mix(in srgb, var(--good) 13%, transparent)}
+.opt.wrong{border-color:var(--pen); background:color-mix(in srgb, var(--pen) 11%, transparent)}
+.act{
+  margin-top:12px; padding:11px 20px; border:2px solid var(--ink); border-radius:2px;
+  background:var(--ink); color:var(--paper); font:inherit; font-weight:600; font-size:14.5px;
+  cursor:pointer;
+}
+.act:hover{background:var(--accent); border-color:var(--accent)}
+.act:disabled{opacity:.4; cursor:default}
+.act.ghost{background:transparent; color:var(--ink)}
+.act.ghost:hover{background:var(--cell-hi); color:var(--ink); border-color:var(--accent)}
+.row{display:flex; gap:9px; flex-wrap:wrap}
+
+/* feedback */
+.fb{
+  margin-top:18px; padding:13px 15px; border:2px solid var(--rule); border-left-width:6px;
+  border-radius:3px; background:var(--slab);
+}
+.fb.ok{border-left-color:var(--good)}
+.fb.no{border-left-color:var(--pen)}
+.fb .verdict{
+  font-family:var(--font-display); font-size:13px; letter-spacing:.04em;
+  text-transform:uppercase; margin-bottom:5px;
+}
+.fb.ok .verdict{color:var(--good)}
+.fb.no .verdict{color:var(--pen)}
+.fb p{margin:0; font-size:14px; line-height:1.6; max-width:62ch}
+.fb p + p{margin-top:7px}
+.fb code{
+  font-family:var(--font-mono); background:var(--cell-hi); border-radius:2px; padding:0 3px;
+}
+
+/* results */
+.score-big{
+  font-family:var(--font-display); font-size:clamp(46px,13vw,76px); line-height:.95;
+  letter-spacing:-.03em; font-variant-numeric:tabular-nums; margin:2px 0 4px;
+}
+.tiles{display:grid; grid-template-columns:repeat(auto-fit,minmax(104px,1fr)); gap:9px; margin:16px 0}
+.tile{padding:10px 12px; border:2px solid var(--rule); border-radius:3px; background:var(--slab)}
+.tile .k{font-size:9.5px; letter-spacing:.11em; text-transform:uppercase; color:var(--ink-soft)}
+.tile .v{font-family:var(--font-display); font-size:21px; font-variant-numeric:tabular-nums; margin-top:3px}
+.review{margin:14px 0 0; padding:0; list-style:none; display:grid; gap:8px}
+.review li{
+  display:flex; gap:10px; align-items:baseline; font-size:14px; line-height:1.5;
+  padding-left:11px; border-left:3px solid var(--pen);
+}
+.review .tally{
+  font-family:var(--font-mono); font-size:12px; color:var(--pen); flex:0 0 auto; font-weight:600;
+}
+.review .file{font-family:var(--font-mono); font-size:12.3px; color:var(--ink-soft); display:block}
+h2.rank{margin:0; font-size:14px; letter-spacing:.11em; text-transform:uppercase; color:var(--ink-soft)}
+.saved{font-size:12.5px; color:var(--ink-soft); margin:14px 0 0}
+
+@keyframes pop{0%{transform:scale(1)}45%{transform:scale(1.16)}100%{transform:scale(1)}}
+@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-5px)}40%{transform:translateX(5px)}60%{transform:translateX(-3px)}80%{transform:translateX(3px)}}
+@media (prefers-reduced-motion: reduce){*{animation:none!important; transition:none!important}}
+:focus-visible{outline:3px solid var(--accent); outline-offset:2px}
+</style>
+
+<div class="wrap">
+  <div class="bar">
+    <h1 class="mark">ARRAY<span>[</span>ARCADE<span>]</span></h1>
+    <div class="spacer"></div>
+    <div class="gauges" id="gauges" hidden>
+      <div class="gauge"><div class="k">Score</div><div class="v" id="g-score">0</div></div>
+      <div class="gauge"><div class="k">Streak</div><div class="v" id="g-streak">0</div></div>
+      <div class="gauge"><div class="k">Lives</div><div class="lives" id="g-lives"></div></div>
+    </div>
+  </div>
+
+  <section id="menu">
+    <p class="lede">Six drills on <b>B2.2 data structures</b> for IB DP Computer Science — lists and arrays.
+      Click boxes, trace loops, pick the buggy line. Three lives a run; every wrong answer
+      explains itself before you move on.</p>
+    <div class="drills" id="drills"></div>
+    <p class="foot">Each drill maps to a file in your repo, so a weak score tells you exactly what to re-read.
+      Progress is saved to this page when you are signed in.</p>
+  </section>
+
+  <section id="play" hidden>
+    <div class="hdr">
+      <h2 id="p-name">Drill</h2>
+      <span class="count" id="p-count">1 / 7</span>
+      <button class="quit" id="p-quit" type="button">End run</button>
+    </div>
+    <p class="ask" id="p-ask"></p>
+    <div class="stage" id="p-stage"></div>
+    <div id="p-answer"></div>
+    <div id="p-fb"></div>
+  </section>
+
+  <section id="results" hidden>
+    <h2 class="rank" id="r-rank">Run complete</h2>
+    <div class="score-big" id="r-score">0</div>
+    <div class="tiles" id="r-tiles"></div>
+    <div id="r-review"></div>
+    <p class="saved" id="r-saved"></p>
+    <div class="row" style="margin-top:18px">
+      <button class="act" id="r-again" type="button">Play again</button>
+      <button class="act ghost" id="r-menu" type="button">All drills</button>
+    </div>
+  </section>
+</div>
+
+<script>
+"use strict";
+
+/* ===================================================================
+   helpers
+   =================================================================== */
+const RI = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+const PICK = a => a[RI(0, a.length - 1)];
+function SHUF(a) {
+  const b = a.slice();
+  for (let i = b.length - 1; i > 0; i--) { const j = RI(0, i); const t = b[i]; b[i] = b[j]; b[j] = t; }
+  return b;
+}
+function uniqueInts(n, lo, hi) {
+  const s = new Set();
+  while (s.size < n) s.add(RI(lo, hi));
+  return Array.from(s);
+}
+const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const ORD = ["zeroth", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th"];
+const ord = n => ORD[n] || (n + "th");
+const pyList = a => "[" + a.join(", ") + "]";
+
+/* Build a 4-way multiple choice with exactly one correct answer. */
+function choice(correct, pool) {
+  const want = String(correct);
+  const seen = new Set([want]);
+  const opts = [want];
+  for (const d of SHUF(pool)) {
+    const s = String(d);
+    if (!seen.has(s)) { seen.add(s); opts.push(s); }
+    if (opts.length === 4) break;
+  }
+  let guard = 0;
+  while (opts.length < 4 && guard++ < 50) {
+    const s = String(RI(0, 99));
+    if (!seen.has(s)) { seen.add(s); opts.push(s); }
+  }
+  const out = SHUF(opts);
+  return { options: out, answer: out.indexOf(want) };
+}
+
+/* ===================================================================
+   drill 0 — Index Hunt   (zero-based indexing, len-1, negatives)
+   =================================================================== */
+function qIndex() {
+  const n = RI(5, 7);
+  const name = PICK(["marks", "temps", "scores", "prices", "ages"]);
+  const vals = uniqueInts(n, 10, 99);
+  const kind = PICK(["first", "direct", "direct", "last", "lenMinus", "negative", "indexOf"]);
+  let ask, answer, showIndex = false, explain;
+
+  if (kind === "first") {
+    ask = `Click the first element of <code>${name}</code>.`;
+    answer = 0;
+    explain = `The first element is <code>${name}[0]</code>, not <code>${name}[1]</code>. Python counts from zero.`;
+  } else if (kind === "direct") {
+    const i = RI(1, n - 1);
+    ask = `Click <code>${name}[${i}]</code>.`;
+    answer = i;
+    explain = `Counting starts at 0, so <code>${name}[${i}]</code> is the ${ord(i + 1)} box along — value <code>${vals[i]}</code>.`;
+  } else if (kind === "last") {
+    ask = `Click the last element of <code>${name}</code>.`;
+    answer = n - 1;
+    explain = `<code>len(${name})</code> is ${n}, but the last index is ${n} − 1 = <b>${n - 1}</b>. That gap is the off-by-one trap.`;
+  } else if (kind === "lenMinus") {
+    const back = RI(1, 3);
+    ask = `Click <code>${name}[len(${name}) - ${back}]</code>.`;
+    answer = n - back;
+    explain = `<code>len(${name})</code> is ${n}, so this is index ${n} − ${back} = <b>${n - back}</b>.`;
+  } else if (kind === "negative") {
+    const j = RI(1, 3);
+    showIndex = true;
+    ask = `Click <code>${name}[-${j}]</code>.`;
+    answer = n - j;
+    explain = `<code>-1</code> is the last box, so <code>-${j}</code> counts back ${j} from the end: index ${n} − ${j} = <b>${n - j}</b>.`;
+  } else {
+    const k = RI(0, n - 1);
+    ask = `<code>${name}.index(${vals[k]})</code> returns a position. Click the box at that position.`;
+    answer = k;
+    explain = `<code>.index()</code> hands back the <b>index</b> of the value, not the value: ${vals[k]} sits at index ${k}.`;
+  }
+  return { topic: "index", render: "pick1d", ask, values: vals, name, showIndex, answer, explain };
+}
+
+/* ===================================================================
+   drill 1 — Slice Select   (inclusive start, exclusive stop)
+   =================================================================== */
+function qSlice() {
+  const n = RI(6, 8);
+  const letters = ["a", "b", "c", "d", "e", "f", "g", "h"].slice(0, n).map(c => "'" + c + "'");
+  const name = "letters";
+  const kind = PICK(["select", "select", "open", "which", "count"]);
+  const a = RI(0, n - 3), b = RI(a + 2, n);
+  const span = [];
+  for (let i = a; i < b; i++) span.push(i);
+
+  if (kind === "select" || kind === "open") {
+    let expr = `${name}[${a}:${b}]`, lo = a, hi = b, why;
+    if (kind === "open") {
+      if (RI(0, 1)) { expr = `${name}[:${b}]`; lo = 0; why = `An empty start means “from the beginning”, so this is <code>[0:${b}]</code>.`; }
+      else { expr = `${name}[${a}:]`; hi = n; why = `An empty stop means “to the end”, so this is <code>[${a}:${n}]</code>.`; }
+    } else {
+      why = `The start is included, the stop is not.`;
+    }
+    const sel = [];
+    for (let i = lo; i < hi; i++) sel.push(i);
+    return {
+      topic: "slice", render: "multi1d", name, values: letters, showIndex: true,
+      ask: `Select every box that <code>${expr}</code> returns.`,
+      answer: sel,
+      explain: `${why} Indices ${lo} up to <b>but not including</b> ${hi} — that is ${hi - lo} elements, because the count is always stop − start.`
+    };
+  }
+
+  if (kind === "count") {
+    const c = choice(b - a, [b - a + 1, b - a - 1, b, a, n]);
+    return {
+      topic: "slice", render: "choice", name, values: letters, showIndex: true, stage: "cells",
+      ask: `How many elements does <code>${name}[${a}:${b}]</code> return?`,
+      options: c.options, answer: c.answer,
+      explain: `Stop minus start: ${b} − ${a} = <b>${b - a}</b>. The box at index ${b} is left out, which is why the subtraction works.`
+    };
+  }
+
+  const result = letters.slice(a, b);
+  /* every distractor must return something DIFFERENT from the correct slice:
+     [a:b+1] only while b < n (past the end it returns the same elements),
+     [a-1:b] only while a > 0 (a negative start wraps round instead). */
+  const pool = [];
+  if (b < n) pool.push(`${name}[${a}:${b + 1}]`);
+  if (a > 0) pool.push(`${name}[${a - 1}:${b}]`);
+  pool.push(`${name}[${a + 1}:${b}]`, `${name}[${a}:${b - 1}]`, `${name}[${b}:${a}]`);
+  const c = choice(`${name}[${a}:${b}]`, pool);
+  return {
+    topic: "slice", render: "choice", name, values: letters, showIndex: true, stage: "cells",
+    ask: `Which slice returns <code>${pyList(result)}</code>?`,
+    options: c.options, answer: c.answer, mono: true,
+    explain: `The result starts at index ${a} and ends at index ${b - 1}, so the stop must be <b>${b}</b> — one past the last element you want.`
+  };
+}
+
+/* ===================================================================
+   drill 2 — Trace the Loop   (the six traversal patterns)
+   =================================================================== */
+const TRACE = [
+  function sumAll() {
+    const v = uniqueInts(RI(4, 5), 2, 20);
+    const t = v.reduce((x, y) => x + y, 0);
+    return {
+      lines: [`values = ${pyList(v)}`, `total = 0`, `for value in values:`, `    total = total + value`, `print(total)`],
+      correct: t, pool: [t - v[0], t - v[v.length - 1], v.length, t + v[0], t - 1, Math.max.apply(null, v)],
+      explain: `An accumulator: start at 0, add every element. ${v.join(" + ")} = <b>${t}</b>.`
+    };
+  },
+  function maxSeededZero() {
+    const v = SHUF(uniqueInts(4, -40, -2));
+    return {
+      lines: [`values = ${pyList(v)}`, `largest = 0`, `for value in values:`, `    if value > largest:`, `        largest = value`, `print(largest)`],
+      correct: 0, pool: [Math.max.apply(null, v), Math.min.apply(null, v), v[0], v[v.length - 1]],
+      explain: `No element is greater than 0, so <code>largest</code> never changes and the answer is <b>0</b> — a value that is not even in the list. A running maximum must be seeded with <code>values[0]</code>.`
+    };
+  },
+  function maxCorrect() {
+    const v = SHUF(uniqueInts(5, -20, 40));
+    const m = Math.max.apply(null, v);
+    return {
+      lines: [`values = ${pyList(v)}`, `largest = values[0]`, `for i in range(1, len(values)):`, `    if values[i] > largest:`, `        largest = values[i]`, `print(largest)`],
+      correct: m, pool: [v[0], Math.min.apply(null, v), v.indexOf(m), 0],
+      explain: `Seeded with <code>values[0]</code> = ${v[0]}, then each element replaces it only if bigger. The largest is <b>${m}</b>.`
+    };
+  },
+  function searchFound() {
+    const v = uniqueInts(6, 10, 60);
+    const k = RI(0, 5), target = v[k];
+    return {
+      lines: [`values = ${pyList(v)}`, `found = -1`, `for i in range(len(values)):`, `    if values[i] == ${target}:`, `        found = i`, `        break`, `print(found)`],
+      correct: k, pool: [target, k + 1, -1, 0],
+      explain: `Linear search returns the <b>index</b>, not the value: ${target} sits at index <b>${k}</b>.`
+    };
+  },
+  function searchMissing() {
+    const v = uniqueInts(5, 10, 60);
+    let target = RI(61, 95);
+    return {
+      lines: [`values = ${pyList(v)}`, `found = -1`, `for i in range(len(values)):`, `    if values[i] == ${target}:`, `        found = i`, `print(found)`],
+      correct: -1, pool: [0, v.length, "None", target],
+      explain: `${target} is not in the list, so the <code>if</code> never runs and <code>found</code> keeps its starting value <b>-1</b>. That is the standard “not found” signal, because -1 can never be a real forwards index.`
+    };
+  },
+  function countEven() {
+    const v = uniqueInts(6, 1, 40);
+    const c = v.filter(x => x % 2 === 0).length;
+    return {
+      lines: [`values = ${pyList(v)}`, `count = 0`, `for value in values:`, `    if value % 2 == 0:`, `        count = count + 1`, `print(count)`],
+      correct: c, pool: [v.length - c, v.length, c + 1, c + 2, 1, v.length - 1],
+      explain: `A conditional counter. The even values are ${pyList(v.filter(x => x % 2 === 0))} — <b>${c}</b> of them.`
+    };
+  },
+  function skipFirst() {
+    const v = uniqueInts(5, 5, 25);
+    const t = v.reduce((x, y) => x + y, 0);
+    return {
+      lines: [`values = ${pyList(v)}`, `total = 0`, `for i in range(1, len(values)):`, `    total = total + values[i]`, `print(total)`],
+      correct: t - v[0], pool: [t, t - v[v.length - 1], v.length - 1, t + v[0]],
+      explain: `<code>range(1, len(values))</code> starts at 1, so index 0 (the ${v[0]}) is skipped: ${t} − ${v[0]} = <b>${t - v[0]}</b>.`
+    };
+  },
+  function buildReverse() {
+    const v = uniqueInts(4, 10, 80);
+    const r = v.slice().reverse();
+    return {
+      lines: [`values = ${pyList(v)}`, `out = []`, `for i in range(len(values) - 1, -1, -1):`, `    out.append(values[i])`, `print(out)`],
+      /* a sorted-ascending distractor would BE the answer whenever values happens
+         to arrive descending, so every distractor here is a different length or
+         a rotation, neither of which can equal the reverse of a unique list. */
+      correct: pyList(r), pool: [pyList(v), pyList(v.slice(1).reverse()), pyList(v.slice(0, -1).reverse()), pyList(v.slice(1).concat([v[0]]))],
+      explain: `The loop counts down from index ${v.length - 1} to 0 — the stop is -1 because the stop is excluded and index 0 must still be reached. Result: <b>${pyList(r)}</b>.`
+    };
+  },
+  function mutateWhileLooping() {
+    return {
+      lines: [`nums = [2, 4, 6, 8]`, `for n in nums:`, `    if n % 2 == 0:`, `        nums.remove(n)`, `print(nums)`],
+      correct: "[4, 8]", pool: ["[]", "[2, 6]", "[6, 8]", "[2, 4, 6, 8]"],
+      explain: `Removing while iterating. The loop's internal counter moves to 1 while the list shifts left, so every second element is skipped: <b>[4, 8]</b> survive. Build a new list instead.`
+    };
+  },
+  function sortReturnsNone() {
+    return {
+      lines: [`values = [3, 1, 2]`, `values = values.sort()`, `print(values)`],
+      correct: "None", pool: ["[1, 2, 3]", "[3, 1, 2]", "[3, 2, 1]", "[]"],
+      explain: `<code>.sort()</code> sorts in place and returns <b>None</b>, so assigning it throws the list away. Use <code>values.sort()</code> as a statement, or <code>sorted(values)</code> for a new list.`
+    };
+  },
+  function aliasing() {
+    return {
+      lines: [`a = [1, 2, 3]`, `b = a`, `b.append(4)`, `print(a)`],
+      correct: "[1, 2, 3, 4]", pool: ["[1, 2, 3]", "[4]", "[1, 2, 3, [4]]", "None"],
+      explain: `<code>b = a</code> copies the reference, not the list, so both names point at one object: appending through <code>b</code> changes <code>a</code> too. A real copy is <code>a[:]</code>.`
+    };
+  }
+];
+
+function qTrace(maker) {
+  const t = (maker || PICK(TRACE))();
+  const c = choice(t.correct, t.pool);
+  return {
+    topic: "trace", render: "choice", stage: "code", lines: t.lines, mono: true,
+    ask: "What does this print?", options: c.options, answer: c.answer, explain: t.explain
+  };
+}
+
+/* ===================================================================
+   drill 3 — Static or Dynamic   (B2.2.1 vocabulary and judgement)
+   =================================================================== */
+const SCENARIOS = [
+  ["A temperature logged every hour for one day", "Array", "24 readings, known before the program runs and never changing — a fixed-size structure is enough."],
+  ["Every goal scored across a football season", "List", "Nobody knows the final count in advance, so the structure has to grow during execution."],
+  ["The 64 squares of a chess board", "Array", "The board is always 8 × 8. Fixed size, fast indexed access, no resizing ever needed."],
+  ["Students who sign up for a trip", "List", "Sign-ups arrive while the program runs, so the structure must grow as they do."],
+  ["The red, green and blue channels of one pixel", "Array", "Always exactly three values of the same type — the textbook case for a tiny fixed array."],
+  ["Chat messages as they arrive", "List", "An open-ended stream: the count is unknown at the start, so it must be dynamic."],
+  ["The names of the seven days of the week", "Array", "Seven, forever. Fixed size and all the same type."],
+  ["Sensor readings taken until the user presses stop", "List", "The stopping point is decided by the user at run time, so the size cannot be fixed in advance."],
+  ["A noughts-and-crosses board", "Array", "A 3 × 3 grid that never changes shape — a fixed 2-D array."],
+  ["Items a shopper adds to a basket", "List", "Items are added and removed while the program runs."],
+  ["The twelve months and their lengths", "Array", "Twelve fixed entries, so the size can be set when the structure is declared."],
+  ["Scores from every attempt until the player quits", "List", "The number of attempts is unknown until the player stops."]
+];
+
+const OPS = [
+  ["arr[2] = 9", true, "Overwriting one element leaves the length untouched — safe on a fixed-size array."],
+  ["arr.append(9)", false, "Appending makes the structure one longer, which a fixed-size array cannot do."],
+  ["arr.pop()", false, "Removing an element changes the length."],
+  ["arr.insert(0, 5)", false, "Inserting both grows the structure and shuffles every later element along."],
+  ["arr.remove(5)", false, "Removing by value still shortens the structure."],
+  ["arr.sort()", true, "Sorting rearranges the same elements in place; the length never changes."],
+  ["arr.reverse()", true, "Reversing in place swaps positions without adding or removing anything."],
+  ["arr[0], arr[1] = arr[1], arr[0]", true, "A swap is two overwrites — exactly what an array supports."],
+  ["del arr[3]", false, "Deleting an element shortens the structure."],
+  ["arr = arr + [7]", false, "This builds a new, longer list — the original size could not hold it."],
+  ["print(len(arr))", true, "Reading the length changes nothing at all."],
+  ["arr[-1] = 0", true, "Still a single overwrite, just addressed from the end."]
+];
+
+const PROPS = [
+  ["Its size is fixed when it is declared", "Static", "Fixed size at declaration is the defining property of a static structure."],
+  ["Memory is allocated as one contiguous block", "Static", "Contiguous allocation is what makes O(1) address arithmetic possible."],
+  ["It can grow while the program is running", "Dynamic", "Growing at run time is what “dynamic” means."],
+  ["It needs extra memory for pointers and bookkeeping", "Dynamic", "That overhead is the price a dynamic structure pays for flexibility."],
+  ["It may waste memory in slots that are never filled", "Static", "You must declare the worst-case size up front, and unused slots still occupy memory."],
+  ["Its elements are usually all of the same data type", "Static", "A uniform element size is what lets the address formula work."],
+  ["Memory is released again as items are removed", "Dynamic", "Allocating and freeing during execution is dynamic behaviour."],
+  ["Reading element i costs the same no matter how large it is", "Static", "One multiplication and one addition — O(1), independent of size."]
+];
+
+function qKind() {
+  const kind = PICK(["scenario", "scenario", "op", "prop"]);
+  if (kind === "scenario") {
+    const s = PICK(SCENARIOS);
+    const opts = ["Array", "List"];
+    return {
+      topic: "kind", render: "choice", prose: true,
+      ask: `Which structure fits this data?<br><b>${esc(s[0])}</b>`,
+      options: opts, answer: opts.indexOf(s[1]),
+      explain: `<b>${s[1]}.</b> ${s[2]}`
+    };
+  }
+  if (kind === "op") {
+    const o = PICK(OPS);
+    const opts = ["Array-safe", "Changes the size"];
+    return {
+      topic: "kind", render: "choice", stage: "code", lines: [`arr = [4, 8, 1, 6, 2]`, o[0]], prose: true,
+      ask: `Could this run on a fixed-size array?`,
+      options: opts, answer: o[1] ? 0 : 1,
+      explain: `<b>${o[1] ? "Array-safe." : "It changes the size."}</b> ${o[2]}`
+    };
+  }
+  const p = PICK(PROPS);
+  const opts = ["Static", "Dynamic"];
+  return {
+    topic: "kind", render: "choice", prose: true,
+    ask: `Static or dynamic?<br><b>${esc(p[0])}</b>`,
+    options: opts, answer: opts.indexOf(p[1]),
+    explain: `<b>${p[1]}.</b> ${p[2]}`
+  };
+}
+
+/* ===================================================================
+   drill 4 — Grid Raid   (2-D arrays, row before column, row-major memory)
+   =================================================================== */
+function qGrid() {
+  const R = RI(3, 4), C = RI(3, 4);
+  const flat = uniqueInts(R * C, 10, 99);
+  const m = [];
+  for (let r = 0; r < R; r++) m.push(flat.slice(r * C, r * C + C));
+  const kind = PICK(["pick", "pick", "colMax", "rowMax", "offset"]);
+
+  if (kind === "pick") {
+    const r = RI(0, R - 1), c = RI(0, C - 1);
+    return {
+      topic: "grid", render: "pick2d", matrix: m, headers: false,
+      ask: `Click <code>grid[${r}][${c}]</code>.`,
+      answer: r + "," + c,
+      explain: `Row first, then column: down to row ${r}, then across to column ${c} — value <code>${m[r][c]}</code>. Swapping the two indices gives a plausible wrong answer with no error message.`
+    };
+  }
+  if (kind === "colMax") {
+    const c = RI(0, C - 1);
+    let br = 0;
+    for (let r = 1; r < R; r++) if (m[r][c] > m[br][c]) br = r;
+    const col = [];
+    for (let r = 0; r < R; r++) col.push(m[r][c]);
+    return {
+      topic: "grid", render: "pick2d", matrix: m, headers: true,
+      ask: `Click the largest value in column ${c}.`,
+      answer: br + "," + c,
+      explain: `Column ${c} holds ${pyList(col)}, so the largest is <code>${m[br][c]}</code> at <code>grid[${br}][${c}]</code>. Walking a column means the <b>row</b> index varies while the column stays fixed.`
+    };
+  }
+  if (kind === "rowMax") {
+    const r = RI(0, R - 1);
+    let bc = 0;
+    for (let c = 1; c < C; c++) if (m[r][c] > m[r][bc]) bc = c;
+    return {
+      topic: "grid", render: "pick2d", matrix: m, headers: true,
+      ask: `Click the largest value in row ${r}.`,
+      answer: r + "," + bc,
+      explain: `Row ${r} is ${pyList(m[r])}, so the largest is <code>${m[r][bc]}</code> at <code>grid[${r}][${bc}]</code>.`
+    };
+  }
+  const k = RI(0, R * C - 1);
+  const r = Math.floor(k / C), c = k % C;
+  return {
+    topic: "grid", render: "pick2d", matrix: m, headers: true,
+    ask: `A 2-D array is stored in <b>row-major order</b> — one whole row, then the next. Click the cell at memory offset ${k}.`,
+    answer: r + "," + c,
+    explain: `<code>offset = row × columns + col</code>. With ${C} columns: row = ${k} ÷ ${C} = ${r}, column = the remainder ${c}. So offset ${k} is <code>grid[${r}][${c}]</code> = ${m[r][c]}.`
+  };
+}
+
+/* ===================================================================
+   drill 5 — Bug Hunt   (click the line that is wrong)
+   =================================================================== */
+const BUGS = [
+  {
+    ask: "This returns 0 for a list of all-negative numbers. Click the line to blame.",
+    lines: ["def largest(values):", "    largest = 0", "    for value in values:", "        if value > largest:", "            largest = value", "    return largest"],
+    bug: 1,
+    explain: "Seeding with 0 means nothing negative can ever beat it. Start from the data itself: <code>largest = values[0]</code>, and handle the empty list separately."
+  },
+  {
+    ask: "This crashes with IndexError on every list. Click the line to blame.",
+    lines: ["def show_all(values):", "    for i in range(len(values) + 1):", "        print(values[i])"],
+    bug: 1,
+    explain: "<code>range(len(values))</code> already gives every valid index, 0 to len−1. The <code>+ 1</code> asks for one index past the end."
+  },
+  {
+    ask: "After calling this, the caller's own list has changed too. Click the line to blame.",
+    lines: ["def backup(original):", "    copy = original", "    copy.append(0)", "    return copy"],
+    bug: 1,
+    explain: "Assignment copies the reference, not the list — <code>copy</code> and <code>original</code> are one object. Use <code>copy = original[:]</code>."
+  },
+  {
+    ask: "This returns None instead of a sorted list. Click the line to blame.",
+    lines: ["def sorted_copy(values):", "    result = values[:]", "    result = result.sort()", "    return result"],
+    bug: 2,
+    explain: "<code>.sort()</code> sorts in place and returns None. Drop the assignment: <code>result.sort()</code> on its own line."
+  },
+  {
+    ask: "Every row total comes out too big except the first. Click the line that is in the wrong place.",
+    lines: ["def row_totals(grid):", "    totals = []", "    total = 0", "    for row in grid:", "        for value in row:", "            total = total + value", "        totals.append(total)", "    return totals"],
+    bug: 2,
+    explain: "The accumulator is never reset, so each row adds to the previous one's total. <code>total = 0</code> belongs <b>inside</b> the outer loop, at the start of every row."
+  },
+  {
+    ask: "This returns the LAST matching position instead of the first. Click the line that needs a <code>break</code> after it.",
+    lines: ["def first_position(values, target):", "    position = -1", "    for i in range(len(values)):", "        if values[i] == target:", "            position = i", "    return position"],
+    bug: 4,
+    explain: "Without stopping, a later match overwrites the earlier one. Add <code>break</code> after recording the position — or <code>return i</code> straight away."
+  },
+  {
+    ask: "This reads the wrong cells and crashes on a non-square grid. Click the line to blame.",
+    lines: ["def column_total(grid, col):", "    total = 0", "    for r in range(len(grid)):", "        total = total + grid[col][r]", "    return total"],
+    bug: 3,
+    explain: "The indices are swapped. Walking down a column means the row varies and the column is fixed: <code>grid[r][col]</code>."
+  },
+  {
+    ask: "Writing to one cell of this grid changes the same cell in every row. Click the line to blame.",
+    lines: ["def make_grid(rows, cols):", "    return [[0] * cols] * rows"],
+    bug: 1,
+    explain: "<code>* rows</code> repeats one row <b>reference</b>, so all rows are the same object. Build a fresh row each time: <code>[[0] * cols for _ in range(rows)]</code>."
+  },
+  {
+    ask: "Given [2, 4, 6, 8] this returns [4, 8] instead of []. Click the line to blame.",
+    lines: ["def drop_evens(numbers):", "    for n in numbers:", "        if n % 2 == 0:", "            numbers.remove(n)", "    return numbers"],
+    bug: 3,
+    explain: "Removing from the list the loop is still walking makes it skip elements. Build a new list, or iterate over a copy with <code>for n in numbers[:]</code>."
+  },
+  {
+    ask: "This crashes with ZeroDivisionError on an empty list. Click the line to blame.",
+    lines: ["def average(values):", "    total = 0", "    for value in values:", "        total = total + value", "    return total / len(values)"],
+    bug: 4,
+    explain: "<code>len(values)</code> is 0 for an empty list. Guard it first: <code>if len(values) == 0: return 0</code> — and say in a comment what you decided to return."
+  },
+  {
+    ask: "The insert loop turns most of the array into copies of one element. Click the line to blame.",
+    lines: ["def insert_at(arr, used, index, value):", "    for i in range(index, used):", "        arr[i + 1] = arr[i]", "    arr[index] = value", "    return used + 1"],
+    bug: 1,
+    explain: "Shuffling right has to run <b>backwards</b> from the end, or each element is overwritten before it is moved: <code>for i in range(used, index, -1): arr[i] = arr[i - 1]</code>."
+  }
+];
+
+function qBug(item) {
+  const b = item || PICK(BUGS);
+  return { topic: "bug", render: "pickline", ask: b.ask, lines: b.lines, answer: b.bug, explain: b.explain };
+}
+
+/* ===================================================================
+   drills
+   =================================================================== */
+const DRILLS = [
+  { id: "index", chip: "drills[0]", name: "Index Hunt", blurb: "Zero-based counting, len − 1, and negative indices. Click the right box.", n: 7, gen: qIndex, file: "01_lists_basics.py §2 Indexing" },
+  { id: "slice", chip: "drills[1]", name: "Slice Select", blurb: "Why the stop index is excluded. Select the boxes a slice returns.", n: 7, gen: qSlice, file: "01_lists_basics.py §6 Slicing" },
+  { id: "trace", chip: "drills[2]", name: "Trace the Loop", blurb: "Accumulators, running maxima, linear search. Predict what prints.", n: 8, gen: qTrace, file: "02_traversal_patterns.py" },
+  { id: "kind", chip: "drills[3]", name: "Static or Dynamic", blurb: "Array or list? Which operations a fixed-size array can survive.", n: 8, gen: qKind, file: "00_notes.md §2 Array vs list" },
+  { id: "grid", chip: "drills[4]", name: "Grid Raid", blurb: "2-D arrays: row before column, and row-major memory offsets.", n: 7, gen: qGrid, file: "04_two_dimensional.py" },
+  { id: "bug", chip: "drills[5]", name: "Bug Hunt", blurb: "One line is wrong. Click it. Ten classic list and array bugs.", n: 7, gen: qBug, file: "05_pitfalls.py" },
+  { id: "boss", chip: "drills[-1]", name: "Boss Run", blurb: "Twelve questions from all six drills, double points. The last element.", n: 12, gen: null, file: "the whole unit" }
+];
+const byId = id => DRILLS.filter(d => d.id === id)[0];
+const GENS = [qIndex, qSlice, qTrace, qKind, qGrid, qBug];
+
+function buildRun(id) {
+  const d = byId(id);
+  const out = [];
+  if (id === "bug") {
+    const bank = SHUF(BUGS).slice(0, d.n);
+    for (const b of bank) out.push(qBug(b));
+    return out;
+  }
+  if (id === "trace") {
+    const bank = SHUF(TRACE).slice(0, d.n);
+    for (const t of bank) out.push(qTrace(t));
+    return out;
+  }
+  if (id === "boss") {
+    for (let i = 0; i < d.n; i++) out.push(GENS[i % GENS.length]());
+    return SHUF(out);
+  }
+  let lastAsk = "";
+  let guard = 0;
+  while (out.length < d.n && guard++ < 200) {
+    const q = d.gen();
+    if (q.ask === lastAsk) continue;
+    lastAsk = q.ask;
+    out.push(q);
+  }
+  return out;
+}
+
+/* ===================================================================
+   state
+   =================================================================== */
+const S = {
+  mode: null, qs: [], qi: 0, score: 0, streak: 0, bestStreak: 0,
+  lives: 3, correct: 0, answered: 0, misses: {}, picked: [], locked: false, over: false
+};
+let PROG = {};          /* mode id -> {best, plays, acc} */
+let DB = null;
+
+const el = id => document.getElementById(id);
+const show = (id, on) => { el(id).hidden = !on; };
+
+/* ===================================================================
+   menu
+   =================================================================== */
+function paintMenu() {
+  const host = el("drills");
+  host.innerHTML = "";
+  for (const d of DRILLS) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "drill" + (d.id === "boss" ? " boss" : "");
+    const p = PROG[d.id];
+    b.innerHTML =
+      '<span class="chip">' + esc(d.chip) + "</span>" +
+      "<h3>" + esc(d.name) + "</h3>" +
+      "<p>" + esc(d.blurb) + "</p>" +
+      '<span class="best">' + (p && p.plays ? "best " + p.best + " · " + p.acc + "% accurate · " + p.plays + (p.plays === 1 ? " run" : " runs") : "not played yet") + "</span>";
+    b.addEventListener("click", () => startRun(d.id));
+    host.appendChild(b);
+  }
+}
+
+/* ===================================================================
+   run
+   =================================================================== */
+function startRun(id) {
+  S.mode = id; S.qs = buildRun(id); S.qi = 0; S.score = 0; S.streak = 0; S.bestStreak = 0;
+  S.lives = 3; S.correct = 0; S.answered = 0; S.misses = {}; S.over = false;
+  show("menu", false); show("results", false); show("play", true); show("gauges", true);
+  el("p-name").textContent = byId(id).name;
+  paintGauges();
+  paintQuestion();
+}
+
+function paintGauges() {
+  el("g-score").textContent = S.score;
+  el("g-streak").textContent = "×" + mult();
+  const lv = el("g-lives");
+  lv.innerHTML = "";
+  for (let i = 0; i < 3; i++) {
+    const s = document.createElement("span");
+    s.className = "life" + (i < 3 - S.lives ? " spent" : "");
+    lv.appendChild(s);
+  }
+}
+const mult = () => Math.min(1 + Math.floor(S.streak / 2), 3);
+
+/* simple Python highlighter for the code slab */
+const KW = /\b(def|for|in|if|elif|else|while|return|print|len|range|append|insert|remove|pop|sort|reverse|index|not|and|or|break|continue|True|False|None)\b/g;
+function hl(line) {
+  return esc(line)
+    .replace(/'[^']*'/g, m => '<span class="st">' + m + "</span>")
+    .replace(KW, '<span class="kw">$1</span>')
+    .replace(/\b\d+\b/g, '<span class="nu">$&</span>');
+}
+
+function codeBlock(lines, clickable) {
+  const pre = document.createElement("pre");
+  pre.className = "code";
+  lines.forEach((line, i) => {
+    const node = document.createElement(clickable ? "button" : "div");
+    node.className = "cline";
+    if (clickable) { node.type = "button"; node.dataset.i = String(i); }
+    node.innerHTML = '<span class="n">' + i + "</span><span>" + hl(line) + "</span>";
+    pre.appendChild(node);
+  });
+  return pre;
+}
+
+function strip(q, multi) {
+  const box = document.createElement("div");
+  if (q.name) {
+    const label = document.createElement("div");
+    label.className = "varname";
+    label.textContent = q.name + " = [" + q.values.join(", ") + "]";
+    box.appendChild(label);
+  }
+  const row = document.createElement("div");
+  row.className = "strip";
+  q.values.forEach((v, i) => {
+    const slot = document.createElement("div");
+    slot.className = "slot";
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "cell"; b.dataset.i = String(i);
+    b.textContent = String(v).replace(/'/g, "");
+    const idx = document.createElement("span");
+    idx.className = "idx" + (q.showIndex ? "" : " hidden");
+    idx.textContent = q.showIndex ? String(i) : "?";
+    slot.appendChild(b); slot.appendChild(idx);
+    row.appendChild(slot);
+  });
+  box.appendChild(row);
+  if (multi) {
+    const btn = document.createElement("button");
+    btn.className = "act"; btn.type = "button"; btn.id = "p-check";
+    btn.textContent = "Check selection"; btn.disabled = true;
+    box.appendChild(btn);
+  }
+  return box;
+}
+
+function gridBlock(q) {
+  const m = q.matrix, C = m[0].length;
+  const g = document.createElement("div");
+  g.className = "grid2d";
+  const cw = "clamp(38px,10.4vw,58px)";
+  g.style.gridTemplateColumns = (q.headers ? "1.4rem " : "") + "repeat(" + C + ", " + cw + ")";
+  if (q.headers) {
+    const corner = document.createElement("span");
+    corner.className = "hd";
+    g.appendChild(corner);
+    for (let c = 0; c < C; c++) {
+      const h = document.createElement("span");
+      h.className = "hd"; h.textContent = String(c);
+      g.appendChild(h);
+    }
+  }
+  for (let r = 0; r < m.length; r++) {
+    if (q.headers) {
+      const h = document.createElement("span");
+      h.className = "hd"; h.textContent = String(r);
+      g.appendChild(h);
+    }
+    for (let c = 0; c < C; c++) {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "cell"; b.dataset.rc = r + "," + c;
+      b.textContent = String(m[r][c]);
+      g.appendChild(b);
+    }
+  }
+  const box = document.createElement("div");
+  if (!q.headers) {
+    const note = document.createElement("div");
+    note.className = "varname";
+    note.textContent = "grid — " + m.length + " rows × " + C + " columns";
+    box.appendChild(note);
+  }
+  box.appendChild(g);
+  return box;
+}
+
+function optionList(q) {
+  const wrap = document.createElement("div");
+  wrap.className = "opts";
+  q.options.forEach((text, i) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "opt" + (q.prose ? " prose" : "");
+    b.dataset.i = String(i);
+    b.textContent = text;
+    wrap.appendChild(b);
+  });
+  return wrap;
+}
+
+function paintQuestion() {
+  const q = S.qs[S.qi];
+  S.locked = false; S.picked = [];
+  el("p-count").textContent = (S.qi + 1) + " / " + S.qs.length;
+  el("p-ask").innerHTML = q.ask;
+  el("p-fb").innerHTML = "";
+  const stage = el("p-stage"), answer = el("p-answer");
+  stage.innerHTML = ""; answer.innerHTML = "";
+
+  if (q.render === "pick1d" || q.render === "multi1d") {
+    stage.appendChild(strip(q, q.render === "multi1d"));
+  } else if (q.render === "pick2d") {
+    stage.appendChild(gridBlock(q));
+  } else if (q.render === "pickline") {
+    stage.appendChild(codeBlock(q.lines, true));
+  } else if (q.render === "choice") {
+    if (q.stage === "code") stage.appendChild(codeBlock(q.lines, false));
+    else if (q.stage === "cells") stage.appendChild(strip(q, false));
+    answer.appendChild(optionList(q));
+  }
+
+  if (q.render === "pick1d") {
+    stage.querySelectorAll(".cell").forEach(b =>
+      b.addEventListener("click", () => judge(Number(b.dataset.i), b)));
+  }
+  if (q.render === "multi1d") {
+    const check = el("p-check");
+    stage.querySelectorAll(".cell").forEach(b => b.addEventListener("click", () => {
+      if (S.locked) return;
+      const i = Number(b.dataset.i);
+      const at = S.picked.indexOf(i);
+      if (at === -1) S.picked.push(i); else S.picked.splice(at, 1);
+      b.classList.toggle("on");
+      check.disabled = S.picked.length === 0;
+    }));
+    check.addEventListener("click", () => judge(S.picked.slice().sort((a, b) => a - b), null));
+  }
+  if (q.render === "pick2d") {
+    stage.querySelectorAll(".cell").forEach(b =>
+      b.addEventListener("click", () => judge(b.dataset.rc, b)));
+  }
+  if (q.render === "pickline") {
+    stage.querySelectorAll(".cline").forEach(b =>
+      b.addEventListener("click", () => judge(Number(b.dataset.i), b)));
+  }
+  if (q.render === "choice") {
+    answer.querySelectorAll(".opt").forEach(b =>
+      b.addEventListener("click", () => judge(Number(b.dataset.i), b)));
+  }
+}
+
+function isRight(q, given) {
+  if (Array.isArray(q.answer)) {
+    return Array.isArray(given) && given.join(",") === q.answer.slice().sort((a, b) => a - b).join(",");
+  }
+  return given === q.answer;
+}
+
+function judge(given, node) {
+  if (S.locked) return;
+  S.locked = true;
+  const q = S.qs[S.qi];
+  const ok = isRight(q, given);
+  S.answered++;
+
+  if (ok) {
+    S.correct++;
+    S.score += (100 + 50 * Math.min(S.streak, 4)) * (S.mode === "boss" ? 2 : 1);
+    S.streak++;
+    if (S.streak > S.bestStreak) S.bestStreak = S.streak;
+  } else {
+    S.streak = 0;
+    S.lives--;
+    S.misses[q.topic] = (S.misses[q.topic] || 0) + 1;
+  }
+  paintGauges();
+  markUp(q, given, node, ok);
+  feedback(q, ok);
+}
+
+/* draw the ticks and crosses on whatever the player just used */
+function markUp(q, given, node, ok) {
+  const stage = el("p-stage"), answer = el("p-answer");
+  if (q.render === "pick1d" || q.render === "pick2d") {
+    stage.querySelectorAll(".cell").forEach(b => { b.disabled = true; });
+    const key = q.render === "pick2d" ? "rc" : "i";
+    const want = String(q.answer);
+    stage.querySelectorAll(".cell").forEach(b => {
+      if (b.dataset[key] === want) b.classList.add("right");
+    });
+    if (!ok && node) node.classList.add("wrong");
+  } else if (q.render === "multi1d") {
+    const want = q.answer.map(String);
+    stage.querySelectorAll(".cell").forEach(b => {
+      b.disabled = true;
+      b.classList.remove("on");
+      if (want.indexOf(b.dataset.i) !== -1) b.classList.add("right");
+      else if (S.picked.indexOf(Number(b.dataset.i)) !== -1) b.classList.add("wrong");
+    });
+    const check = el("p-check");
+    if (check) check.disabled = true;
+  } else if (q.render === "pickline") {
+    stage.querySelectorAll(".cline").forEach((b, i) => {
+      b.disabled = true;
+      if (i === q.answer) b.classList.add("right");
+    });
+    if (!ok && node) node.classList.add("wrong");
+  } else if (q.render === "choice") {
+    answer.querySelectorAll(".opt").forEach((b, i) => {
+      b.disabled = true;
+      if (i === q.answer) b.classList.add("right");
+      else if (i === given) b.classList.add("wrong");
+    });
+  }
+}
+
+const CHEERS = ["Correct", "Got it", "Yes", "Clean", "On the money"];
+
+function feedback(q, ok) {
+  const box = el("p-fb");
+  const done = S.qi + 1 >= S.qs.length || S.lives <= 0;
+  box.innerHTML =
+    '<div class="fb ' + (ok ? "ok" : "no") + '" role="status">' +
+    '<div class="verdict">' + (ok ? PICK(CHEERS) : (S.lives <= 0 ? "Out of lives" : "Not quite")) + "</div>" +
+    "<p>" + q.explain + "</p>" +
+    '<button class="act" id="p-next" type="button">' + (done ? "See results" : "Next") + "</button>" +
+    "</div>";
+  const next = el("p-next");
+  next.addEventListener("click", () => {
+    if (done) finish();
+    else { S.qi++; paintQuestion(); window.scrollTo({ top: 0, behavior: "smooth" }); }
+  });
+  next.focus({ preventScroll: true });
+}
+
+/* ===================================================================
+   results
+   =================================================================== */
+const RANKS = [[95, "Array architect"], [80, "Index master"], [65, "Solid traversal"], [45, "Getting there"], [0, "Back to the notes"]];
+
+function finish() {
+  S.over = true;
+  const acc = S.answered ? Math.round((S.correct / S.answered) * 100) : 0;
+  const d = byId(S.mode);
+  show("play", false); show("results", true); show("gauges", false);
+
+  el("r-rank").textContent = S.lives <= 0 ? "Out of lives — " + d.name : d.name + " complete";
+  el("r-score").textContent = S.score;
+
+  let rank = RANKS[RANKS.length - 1][1];
+  for (const r of RANKS) if (acc >= r[0]) { rank = r[1]; break; }
+
+  el("r-tiles").innerHTML =
+    tile("Correct", S.correct + " / " + S.answered) +
+    tile("Accuracy", acc + "%") +
+    tile("Best streak", String(S.bestStreak)) +
+    tile("Rank", rank);
+
+  const topics = Object.keys(S.misses).sort((a, b) => S.misses[b] - S.misses[a]);
+  const rv = el("r-review");
+  if (!topics.length) {
+    rv.innerHTML = '<p class="foot" style="margin:0">Nothing missed. Try the Boss Run, or raise your own bar: ' +
+      "every question type here comes from one of the six files in the unit.</p>";
+  } else {
+    rv.innerHTML = "<h2 class=\"rank\" style=\"margin-bottom:10px\">What to re-read</h2><ul class=\"review\">" +
+      topics.map(t => {
+        const dd = byId(t) || d;
+        return '<li><span class="tally">' + S.misses[t] + "×</span><span>" + esc(dd.name) +
+          '<span class="file">' + esc(dd.file) + "</span></span></li>";
+      }).join("") + "</ul>";
+  }
+
+  saveRun(acc);
+}
+const tile = (k, v) => '<div class="tile"><div class="k">' + k + '</div><div class="v">' + v + "</div></div>";
+
+/* ===================================================================
+   progress — db capability, with the page fully playable without it
+   =================================================================== */
+async function loadProgress() {
+  try {
+    if (typeof claude === "undefined" || !claude.use) return;
+    DB = await claude.use("db");
+    if (!DB) return;
+    const snap = await DB.collection("progress").get();
+    snap.docs.forEach(doc => {
+      const d = doc.data() || {};
+      PROG[doc.id] = {
+        best: Number(d.best) || 0,
+        plays: Number(d.plays) || 0,
+        acc: Number(d.acc) || 0,
+        misses: d.misses && typeof d.misses === "object" ? d.misses : {}
+      };
+    });
+    paintMenu();
+  } catch (e) { DB = null; }
+}
+
+async function saveRun(acc) {
+  const note = el("r-saved");
+  const prev = PROG[S.mode] || { best: 0, plays: 0, acc: 0, misses: {} };
+  const merged = {};
+  for (const k of Object.keys(prev.misses || {})) merged[k] = prev.misses[k];
+  for (const k of Object.keys(S.misses)) merged[k] = (merged[k] || 0) + S.misses[k];
+  const next = {
+    best: Math.max(prev.best, S.score),
+    plays: prev.plays + 1,
+    acc: Math.max(prev.acc, acc),
+    misses: merged
+  };
+  PROG[S.mode] = next;
+  paintMenu();
+
+  if (!DB) { note.textContent = "Progress is not being saved in this view — sign in to keep your best scores."; return; }
+  try {
+    await DB.doc("progress/" + S.mode).set({
+      mode: S.mode, best: next.best, plays: next.plays, acc: next.acc,
+      misses: next.misses, lastScore: S.score, lastAccuracy: acc,
+      lastAt: new Date().toISOString()
+    });
+    note.textContent = next.best === S.score && S.score > 0
+      ? "New best for this drill: " + S.score + ". Saved."
+      : "Saved. Best for this drill: " + next.best + ".";
+  } catch (e) {
+    note.textContent = "Could not save this run, but your score above still stands.";
+  }
+}
+
+/* ===================================================================
+   boot
+   =================================================================== */
+function toMenu() {
+  show("play", false); show("results", false); show("menu", true); show("gauges", false);
+  paintMenu();
+}
+
+function boot(restored) {
+  paintMenu();
+  el("p-quit").addEventListener("click", () => { if (S.answered) finish(); else toMenu(); });
+  el("r-menu").addEventListener("click", toMenu);
+  el("r-again").addEventListener("click", () => startRun(S.mode || "index"));
+
+  if (restored && restored.S && restored.S.mode && !restored.S.over) {
+    Object.keys(restored.S).forEach(k => { S[k] = restored.S[k]; });
+    show("menu", false); show("play", true); show("gauges", true);
+    el("p-name").textContent = byId(S.mode).name;
+    paintGauges(); paintQuestion();
+  }
+  loadProgress();
+}
+
+if (typeof document !== "undefined") {
+  const hot = window.claude && window.claude.hot;
+  if (hot && hot.snapshot) hot.snapshot(() => ({ S: S }));
+  if (hot && hot.ready) hot.ready(boot);
+  else boot((hot && hot.data) || null);
+}
+
+/* exposed so the generators can be exercised outside a browser */
+globalThis.ARCADE = { buildRun: buildRun, DRILLS: DRILLS, BUGS: BUGS, TRACE: TRACE, isRight: isRight, GENS: GENS };
+</script>

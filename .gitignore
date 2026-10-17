@@ -1,3 +1,4 @@
 __pycache__/
 *.pyc
 .arcade_scores.json
+.valuelab_scores.json

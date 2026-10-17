@@ -1,0 +1,975 @@
+<title>Value Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one-screen app - status bar, expression slab, answer rail, feedback.
+   Sibling of array-arcade.html and shares its tokens: light = squared exercise
+   paper with red pen, dark = blackboard and chalk. */
+:root{
+  --paper:#f3f5ef; --grid:#d6e0d8; --rule:#b4c3bc;
+  --ink:#19282a; --ink-soft:#5d6f6b;
+  --pen:#c3362a; --accent:#1d4f86;
+  --good:#1c7a52; --bad:#c3362a;
+  --cell:#fffffe; --cell-edge:#9fb0aa; --cell-hi:#e6ede8;
+  --slab:#ffffff; --shadow:0 1px 0 rgba(25,40,42,.16);
+  --font-display:"Archivo Black","Trebuchet MS",Impact,sans-serif;
+  --font-body:"IBM Plex Sans",-apple-system,"Segoe UI",sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#151c1a; --grid:#222d29; --rule:#33403b;
+    --ink:#e9efe8; --ink-soft:#9aada6;
+    --pen:#f08a74; --accent:#86bdf5;
+    --good:#74d3a1; --bad:#f08a74;
+    --cell:#1e2724; --cell-edge:#49564f; --cell-hi:#2a3530;
+    --slab:#1b2320; --shadow:0 1px 0 rgba(0,0,0,.45);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#151c1a; --grid:#222d29; --rule:#33403b;
+  --ink:#e9efe8; --ink-soft:#9aada6;
+  --pen:#f08a74; --accent:#86bdf5;
+  --good:#74d3a1; --bad:#f08a74;
+  --cell:#1e2724; --cell-edge:#49564f; --cell-hi:#2a3530;
+  --slab:#1b2320; --shadow:0 1px 0 rgba(0,0,0,.45);
+  color-scheme:dark;
+}
+
+*{box-sizing:border-box}
+/* the publish skeleton supplies this; repeat it so the file also works
+   when it is opened straight from the repo as a local page */
+[hidden]{display:none!important}
+html,body{min-height:100%}
+body{
+  margin:0; font-family:var(--font-body); color:var(--ink);
+  background-color:var(--paper);
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size:26px 26px;
+  -webkit-text-size-adjust:100%;
+}
+.wrap{
+  max-width:860px; margin:0 auto;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));
+  padding-right:max(16px, env(safe-area-inset-right, 0px));
+  padding-block:14px 40px;
+}
+code,kbd{font-family:var(--font-mono); font-size:.94em}
+b{font-weight:600}
+
+/* ---------- status bar ---------- */
+.bar{
+  display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+  padding-bottom:10px; margin-bottom:16px; border-bottom:2px solid var(--rule);
+}
+.mark{
+  font-family:var(--font-display); font-size:clamp(17px,4.4vw,22px);
+  letter-spacing:-.02em; margin:0; line-height:1;
+}
+.mark span{color:var(--pen)}
+.bar .spacer{flex:1 1 auto; min-width:0}
+.gauges{display:flex; align-items:center; gap:14px}
+.gauge{display:flex; flex-direction:column; align-items:flex-end; line-height:1.1}
+.gauge .k{font-size:9.5px; letter-spacing:.11em; text-transform:uppercase; color:var(--ink-soft)}
+.gauge .v{font-family:var(--font-display); font-size:19px; font-variant-numeric:tabular-nums}
+.lives{display:flex; gap:4px}
+.life{
+  width:15px; height:15px; border:2px solid var(--ink); border-radius:2px;
+  background:var(--cell); position:relative;
+}
+.life.spent{border-color:var(--pen); background:transparent}
+.life.spent::after{
+  content:"\2715"; position:absolute; inset:-5px 0 0; color:var(--pen);
+  font-size:15px; font-weight:700; text-align:center; line-height:1;
+}
+
+/* ---------- menu ---------- */
+.lede{max-width:60ch; color:var(--ink-soft); font-size:14.5px; line-height:1.55; margin:0 0 18px}
+.lede b{color:var(--ink)}
+.drills{display:grid; grid-template-columns:repeat(auto-fit,minmax(224px,1fr)); gap:10px; margin:0 0 14px}
+.drill{
+  display:flex; flex-direction:column; gap:6px; text-align:left;
+  padding:13px 14px 12px; border:2px solid var(--rule); border-radius:3px;
+  background:var(--slab); color:inherit; font:inherit; cursor:pointer;
+  box-shadow:var(--shadow); min-width:0;
+}
+.drill:hover{border-color:var(--accent)}
+.drill .chip{font-family:var(--font-mono); font-size:11.5px; font-weight:600; color:var(--pen)}
+.drill h3{margin:0; font-size:15.5px; font-weight:600; letter-spacing:-.01em}
+.drill p{margin:0; font-size:12.8px; line-height:1.45; color:var(--ink-soft)}
+.drill .best{
+  margin-top:2px; font-family:var(--font-mono); font-size:11px; color:var(--ink-soft);
+  font-variant-numeric:tabular-nums;
+}
+.drill.boss{border-color:var(--pen)}
+.drill.boss .chip{color:var(--accent)}
+.foot{font-size:12.5px; color:var(--ink-soft); line-height:1.6; margin:18px 0 0}
+.foot code{color:var(--ink)}
+
+/* ---------- play ---------- */
+.hdr{display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin-bottom:12px}
+.hdr h2{margin:0; font-size:15px; font-weight:600}
+.hdr .count{font-family:var(--font-mono); font-size:12px; color:var(--ink-soft); font-variant-numeric:tabular-nums}
+.hdr .quit{
+  margin-left:auto; background:none; border:0; padding:4px 0; cursor:pointer;
+  font:inherit; font-size:12.5px; color:var(--ink-soft); text-decoration:underline;
+}
+.hdr .quit:hover{color:var(--pen)}
+.ask{
+  font-size:clamp(15.5px,3.6vw,18px); line-height:1.45; margin:0 0 18px;
+  text-wrap:balance; max-width:58ch;
+}
+.ask code{
+  background:var(--cell-hi); border:1px solid var(--cell-edge); border-radius:2px;
+  padding:1px 4px; white-space:nowrap;
+}
+.stage{margin-bottom:18px; min-width:0}
+.varname{font-family:var(--font-mono); font-size:12.5px; color:var(--ink-soft); margin-bottom:7px}
+
+/* the expression slab - the centrepiece of this game */
+.expr{
+  display:block; overflow-x:auto; background:var(--slab);
+  border:2px solid var(--rule); border-left:6px solid var(--accent);
+  border-radius:3px; padding:18px 18px;
+  font-family:var(--font-mono); font-size:clamp(17px,4.6vw,26px);
+  font-weight:600; line-height:1.4; white-space:pre; min-width:0;
+  box-shadow:var(--shadow);
+}
+.expr .cursor{
+  display:inline-block; width:.55em; height:1.05em; vertical-align:-.16em;
+  background:var(--pen); margin-left:.12em; animation:blink 1.1s steps(1) infinite;
+}
+
+/* code slab */
+.code{
+  margin:0; overflow-x:auto; background:var(--slab); border:2px solid var(--rule);
+  border-radius:3px; padding:11px 0;
+}
+.cline{
+  display:flex; gap:12px; align-items:baseline; width:100%; text-align:left;
+  font-family:var(--font-mono); font-size:clamp(12.2px,3vw,13.6px); line-height:1.75;
+  background:none; border:0; color:var(--ink); padding:1px 13px; white-space:pre;
+}
+button.cline{cursor:pointer}
+button.cline:hover:not(:disabled){background:var(--cell-hi)}
+button.cline:disabled{cursor:default}
+.cline .n{
+  color:var(--ink-soft); font-size:10.5px; min-width:1.3em; text-align:right;
+  flex:0 0 auto; user-select:none;
+}
+.cline.right{background:color-mix(in srgb, var(--good) 16%, transparent); box-shadow:inset 3px 0 0 var(--good)}
+.cline.wrong{background:color-mix(in srgb, var(--pen) 14%, transparent); box-shadow:inset 3px 0 0 var(--pen)}
+.kw{color:var(--accent); font-weight:600}
+.nu{color:var(--pen)}
+.st{color:var(--good)}
+
+/* answers */
+.opts{display:grid; gap:7px; grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.opt{
+  padding:12px 13px; border:2px solid var(--cell-edge); border-radius:2px;
+  background:var(--slab); color:inherit; cursor:pointer; text-align:left;
+  font-family:var(--font-mono); font-size:14px; font-weight:600; min-width:0;
+  word-break:break-word; box-shadow:var(--shadow);
+}
+.opt:hover:not(:disabled){border-color:var(--accent); background:var(--cell-hi)}
+.opt:disabled{cursor:default}
+.opt.right{border-color:var(--good); background:color-mix(in srgb, var(--good) 13%, transparent)}
+.opt.wrong{border-color:var(--pen); background:color-mix(in srgb, var(--pen) 11%, transparent)}
+
+.typein{display:flex; gap:9px; flex-wrap:wrap; align-items:flex-start}
+.typein label{
+  flex:0 0 100%; font-family:var(--font-mono); font-size:12px;
+  color:var(--ink-soft); margin-bottom:-2px;
+}
+.typein input{
+  flex:1 1 180px; min-width:0; padding:12px 13px;
+  border:2px solid var(--cell-edge); border-radius:2px;
+  background:var(--cell); color:var(--ink);
+  font-family:var(--font-mono); font-size:16px; font-weight:600;
+  box-shadow:var(--shadow);
+}
+.typein input:focus{border-color:var(--accent); outline:none; background:var(--cell-hi)}
+.typein input.right{border-color:var(--good)}
+.typein input.wrong{border-color:var(--pen)}
+.typein input:disabled{opacity:.75}
+
+.act{
+  padding:11px 20px; border:2px solid var(--ink); border-radius:2px;
+  background:var(--ink); color:var(--paper); font:inherit; font-weight:600; font-size:14.5px;
+  cursor:pointer; flex:0 0 auto;
+}
+.act:hover:not(:disabled){background:var(--accent); border-color:var(--accent)}
+.act:disabled{opacity:.4; cursor:default}
+.act.ghost{background:transparent; color:var(--ink)}
+.act.ghost:hover:not(:disabled){background:var(--cell-hi); color:var(--ink); border-color:var(--accent)}
+.row{display:flex; gap:9px; flex-wrap:wrap}
+
+/* feedback */
+.fb{
+  margin-top:18px; padding:13px 15px; border:2px solid var(--rule); border-left-width:6px;
+  border-radius:3px; background:var(--slab);
+}
+.fb.ok{border-left-color:var(--good)}
+.fb.no{border-left-color:var(--pen)}
+.fb .verdict{
+  font-family:var(--font-display); font-size:13px; letter-spacing:.04em;
+  text-transform:uppercase; margin-bottom:5px;
+}
+.fb.ok .verdict{color:var(--good)}
+.fb.no .verdict{color:var(--pen)}
+.fb p{margin:0; font-size:14px; line-height:1.6; max-width:62ch}
+.fb p + p{margin-top:7px}
+.fb code{font-family:var(--font-mono); background:var(--cell-hi); border-radius:2px; padding:0 3px}
+.fb .src{
+  display:block; margin-top:9px; font-family:var(--font-mono); font-size:11.5px;
+  color:var(--ink-soft);
+}
+
+/* results */
+.score-big{
+  font-family:var(--font-display); font-size:clamp(46px,13vw,76px); line-height:.95;
+  letter-spacing:-.03em; font-variant-numeric:tabular-nums; margin:2px 0 4px;
+}
+.tiles{display:grid; grid-template-columns:repeat(auto-fit,minmax(104px,1fr)); gap:9px; margin:16px 0}
+.tile{padding:10px 12px; border:2px solid var(--rule); border-radius:3px; background:var(--slab)}
+.tile .k{font-size:9.5px; letter-spacing:.11em; text-transform:uppercase; color:var(--ink-soft)}
+.tile .v{font-family:var(--font-display); font-size:21px; font-variant-numeric:tabular-nums; margin-top:3px}
+.review{margin:14px 0 0; padding:0; list-style:none; display:grid; gap:8px}
+.review li{
+  display:flex; gap:10px; align-items:baseline; font-size:14px; line-height:1.5;
+  padding-left:11px; border-left:3px solid var(--pen);
+}
+.review .tally{font-family:var(--font-mono); font-size:12px; color:var(--pen); flex:0 0 auto; font-weight:600}
+.review .file{font-family:var(--font-mono); font-size:12.3px; color:var(--ink-soft); display:block}
+h2.rank{margin:0; font-size:14px; letter-spacing:.11em; text-transform:uppercase; color:var(--ink-soft)}
+.saved{font-size:12.5px; color:var(--ink-soft); margin:14px 0 0}
+
+@keyframes pop{0%{transform:scale(1)}45%{transform:scale(1.05)}100%{transform:scale(1)}}
+@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-5px)}40%{transform:translateX(5px)}60%{transform:translateX(-3px)}80%{transform:translateX(3px)}}
+@keyframes blink{0%,50%{opacity:1}50.01%,100%{opacity:0}}
+.pop{animation:pop .28s ease-out}
+.shake{animation:shake .3s}
+@media (prefers-reduced-motion: reduce){*{animation:none!important; transition:none!important}}
+:focus-visible{outline:3px solid var(--accent); outline-offset:2px}
+</style>
+
+<div class="wrap">
+  <div class="bar">
+    <h1 class="mark">VALUE<span>&nbsp;=&nbsp;</span>LAB</h1>
+    <div class="spacer"></div>
+    <div class="gauges" id="gauges" hidden>
+      <div class="gauge"><div class="k">Score</div><div class="v" id="g-score">0</div></div>
+      <div class="gauge"><div class="k">Streak</div><div class="v" id="g-streak">&times;1</div></div>
+      <div class="gauge"><div class="k">Lives</div><div class="lives" id="g-lives"></div></div>
+    </div>
+  </div>
+
+  <section id="menu">
+    <p class="lede">Six drills on <b>variables, data types, operators and tracing</b> &mdash; the
+      groundwork under every program you will write. Predict what the code does
+      <b>before</b> you run it; that one habit is the whole skill. Three lives a run, and
+      every answer explains itself before you move on.</p>
+    <div class="drills" id="drills"></div>
+    <p class="foot">Each drill maps to a lesson file in <code>a1_1_fundamentals/</code>, so a weak
+      score tells you exactly what to re-read. Progress is saved to this page when you are
+      signed in.</p>
+  </section>
+
+  <section id="play" hidden>
+    <div class="hdr">
+      <h2 id="p-name">Drill</h2>
+      <span class="count" id="p-count">1 / 8</span>
+      <button class="quit" id="p-quit" type="button">End run</button>
+    </div>
+    <p class="ask" id="p-ask"></p>
+    <div class="stage" id="p-stage"></div>
+    <div id="p-answer"></div>
+    <div id="p-fb"></div>
+  </section>
+
+  <section id="results" hidden>
+    <h2 class="rank" id="r-rank">Run complete</h2>
+    <div class="score-big" id="r-score">0</div>
+    <div class="tiles" id="r-tiles"></div>
+    <div id="r-review"></div>
+    <p class="saved" id="r-saved"></p>
+    <div class="row" style="margin-top:18px">
+      <button class="act" id="r-again" type="button">Play again</button>
+      <button class="act ghost" id="r-menu" type="button">All drills</button>
+    </div>
+  </section>
+</div>
+
+<script>
+"use strict";
+
+/* ===================================================================
+   helpers
+   =================================================================== */
+const el = id => document.getElementById(id);
+const show = (id, on) => { el(id).hidden = !on; };
+const RI = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+const PICK = a => a[RI(0, a.length - 1)];
+function SHUF(a) {
+  const b = a.slice();
+  for (let i = b.length - 1; i > 0; i--) { const j = RI(0, i); const t = b[i]; b[i] = b[j]; b[j] = t; }
+  return b;
+}
+const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+/* An answer typed by a human, reduced to something comparable. */
+const norm = s => String(s).trim().toLowerCase().replace(/\s+/g, "").replace(/^['"]|['"]$/g, "");
+
+/* Build a 4-way multiple choice with exactly one correct answer. */
+function choice(correct, pool) {
+  const want = String(correct);
+  const seen = new Set([want]);
+  const opts = [want];
+  for (const d of SHUF(pool)) {
+    const s = String(d);
+    if (!seen.has(s)) { seen.add(s); opts.push(s); }
+    if (opts.length === 4) break;
+  }
+  const out = SHUF(opts);
+  return { options: out, answer: out.indexOf(want) };
+}
+
+/* ===================================================================
+   question banks — every claimed answer verified against CPython 3.13
+   =================================================================== */
+const TYPE_OPTIONS = ["int", "float", "str", "bool"];
+
+const TYPES = [
+  ["42", "int", "A whole number, no decimal point and no quotes."],
+  ["42.0", "float", "The <code>.0</code> is what makes it a float. Same value as 42, different type."],
+  ['"42"', "str", "Quotes mean <b>text</b>. These are the characters 4 and 2, not a number."],
+  ["7 / 2", "float", "<code>/</code> is true division and <b>always</b> returns a float."],
+  ["6 / 3", "float", "Still a float &mdash; 2.0, not 2. <code>/</code> never gives an int, even when it divides exactly."],
+  ["7 // 2", "int", "<code>//</code> is floor division; int // int gives an int."],
+  ['input("Age: ")', "str", "<code>input()</code> ALWAYS returns a str. Always. This is the one never to forget."],
+  ["3 < 5", "bool", "A comparison evaluates to True or False."],
+  ['"a" + "b"', "str", "str + str concatenates, giving another str."],
+  ['float("3")', "float", "<code>float()</code> of anything gives a float: 3.0."],
+  ["round(3.7)", "int", "<code>round()</code> with no second argument returns an int. <code>round(3.7, 1)</code> would give a float."],
+  ["len([1, 2, 3])", "int", "A count of things is always a whole number."],
+  ['7 == "7"', "bool", "It compares fine and the answer is False &mdash; different types are never equal. Only <code>&lt;</code> and <code>&gt;</code> raise a TypeError across types."],
+  ["2 ** 10", "int", "int ** positive int stays an int: 1024."],
+  ["10 % 3", "int", "The remainder of two ints is an int."]
+];
+
+const VALUES = [
+  ["7 // 2", ["3"], "Floor division: how many whole 2s fit into 7."],
+  ["7 % 2", ["1"], "The remainder after taking out the whole 2s."],
+  ["7 / 2", ["3.5"], "True division. Note the float."],
+  ["6 / 3", ["2.0"], "2.0, <b>not</b> 2. <code>/</code> always returns a float. This exact distinction is worth a mark."],
+  ["-7 // 2", ["-4"], "<code>//</code> rounds <b>down</b>, towards minus infinity &mdash; not towards zero. <code>int(-7 / 2)</code> would give -3 instead."],
+  ["2 + 3 * 4", ["14"], "<code>*</code> before <code>+</code>. Not 20."],
+  ["(2 + 3) * 4", ["20"], "Brackets first, so now it is 20."],
+  ["2 ** 3 ** 2", ["512"], "<code>**</code> groups <b>right to left</b>: 2 ** (3 ** 2) = 2 ** 9. Everything else groups left to right."],
+  ["10 - 4 - 3", ["3"], "Left to right: (10 - 4) - 3. If it grouped right it would be 9."],
+  ["10.0 + 5.0 / 2", ["12.5"], "<b>The</b> average bug. <code>/</code> beats <code>+</code>, so it is 10.0 + 2.5 &mdash; not the mean."],
+  ["(10.0 + 5.0) / 2", ["7.5"], "Brackets fix it. <i>This</i> is the mean."],
+  ["127 % 10", ["7"], "<code>% 10</code> peels off the last digit."],
+  ["127 // 10", ["12"], "<code>// 10</code> removes the last digit."],
+  ["int(3.9)", ["3"], "<code>int()</code> <b>truncates</b>. It does not round."],
+  ["round(3.9)", ["4"], "<code>round()</code> rounds. Use it when you mean rounding."],
+  ["int(-3.9)", ["-3"], "<code>int()</code> chops towards zero, so -3. But <code>-3.9 // 1</code> is -4.0. Two different behaviours."],
+  ['"10" + "5"', ["105", "'105'"], "<b>Concatenation</b>, because both sides are strings. The classic forgot-the-<code>float()</code> bug."],
+  ["-3 ** 2", ["-9"], "<code>**</code> beats the minus sign, so it is -(3 ** 2). <code>(-3) ** 2</code> would be 9."],
+  ["100 // 7 % 5", ["4"], "Same precedence level, so left to right: (100 // 7) % 5 = 14 % 5."],
+  ["227 // 60", ["3"], "Whole minutes in 227 seconds."],
+  ["227 % 60", ["47"], "Leftover seconds. <code>//</code> and <code>%</code> are always a pair."],
+  ["bool(0)", ["false"], "0 is the only falsy number."],
+  ['bool("False")', ["true"], "<b>Any</b> non-empty string is True &mdash; even the text \"False\". Nasty one."],
+  ["0.1 + 0.2 == 0.3", ["false"], "Floats are binary approximations, so the sum is 0.30000000000000004. Never compare floats with <code>==</code>."],
+  ["7 == 7.0", ["true"], "Equal in <b>value</b>, even though the types differ."]
+];
+
+const TRACES = [
+  [["total = 0", "for value in [3, 7, 11]:", "    total = total + value"],
+   "total", ["21"],
+   "The accumulator pattern: start at 0, visit each, add it on. 3 + 7 + 11."],
+
+  [["total = 0", "for value in [3, 7, 11]:", "    total = value"],
+   "total", ["11"],
+   "<code>total = value</code> <b>overwrites</b> instead of accumulating, so you are left with the last value. Look for the missing <code>total +</code> on line 3."],
+
+  [["count = 0", "for value in [4, 8, 15, 16]:", "    if value % 2 == 0:", "        count = count + 1"],
+   "count", ["3"],
+   "4, 8 and 16 are even; 15 is not. A conditional count."],
+
+  [["best = 0", "for value in [-5, -2, -9]:", "    if value > best:", "        best = value"],
+   "best", ["0"],
+   "Broken &mdash; and the answer 0 proves it, because 0 is not even in the list. Seed the running best with <code>values[0]</code>, never with 0."],
+
+  [["numbers = [10, 5]", "total = 0", "for value in numbers:", "    total = total + value", "average = total / len(numbers)"],
+   "average", ["7.5"],
+   "15 / 2 = 7.5. The <code>/</code> gives a float, and <code>len()</code> means it still works if you add a third number."],
+
+  [["number = 1274", "digits = 0", "while number > 0:", "    digits = digits + 1", "    number = number // 10"],
+   "digits", ["4"],
+   "Each pass removes one digit from the right: 1274, 127, 12, 1, then 0 stops the loop. Four passes."],
+
+  [["x = 5", "y = x", "x = 10"],
+   "y", ["5"],
+   "<code>y = x</code> copied the <b>value</b> 5. Re-pointing <code>x</code> later does not follow through to <code>y</code>."],
+
+  [["total = 10", "total = total + 5", "total = total * 2"],
+   "total", ["30"],
+   "Each line re-points the name: 10, then 15, then 30. The right-hand side is always evaluated first."],
+
+  [['first = "10"', 'second = "5"', "joined = first + second"],
+   "joined", ["105", "'105'"],
+   "Both are strings, so <code>+</code> concatenates. This is what your program does when you forget <code>float()</code>."],
+
+  [["seconds = 227", "minutes = seconds // 60", "seconds = seconds % 60"],
+   "seconds", ["47"],
+   "Line 3 overwrites <code>seconds</code> with the remainder. Reusing a name for a different meaning is legal and confusing."]
+];
+
+const CASTS = [
+  ['float("3.5")', "3.5", "A valid real-number literal."],
+  ['int("3.5")', "ValueError", "<code>int()</code> parses <b>whole</b> numbers only; the dot is not valid in one. Use <code>int(float(\"3.5\"))</code> if you want 3."],
+  ['float("ten")', "ValueError", "Words are not numbers. Catch this one."],
+  ['int("42")', "42", "A clean whole-number string."],
+  ['float("")', "ValueError", "The empty string &mdash; what you get when the user just presses Enter, so your validation must handle it."],
+  ['float(" 7 ")', "7.0", "<code>float()</code> strips surrounding whitespace for you. A rare kindness."],
+  ['float("12abc")', "ValueError", "All or nothing &mdash; it will not read the 12 and stop."],
+  ['int(float("3.9"))', "3", "<code>float()</code> then <code>int()</code>, and <code>int()</code> truncates."],
+  ['float("4e2")', "400.0", "Scientific notation <b>is</b> a valid float literal: 4 &times; 10&sup2;."],
+  ['float("3,5")', "ValueError", "A comma is the decimal separator in much of the world, but Python insists on a dot. Worth saying so in your error message."]
+];
+
+const FORMATS = [
+  ['f"{1234.5678:.2f}"', "'1234.57'", "<code>.2f</code> means two decimal places, and it rounds."],
+  ['f"{20 / 3:.1f}"', "'6.7'", "6.666... to one decimal place. You can put a calculation inside the braces."],
+  ['f"{1234.5:,.2f}"', "'1,234.50'", "The comma adds thousands separators; <code>.2f</code> keeps the trailing zero."],
+  ['f"{7:.0f}"', "'7'", "<code>.0f</code> means no decimals at all."],
+  ['f"{0.5:+.2f}"', "'+0.50'", "The <code>+</code> forces the sign to be shown."],
+  ['f"{42}"', "'42'", "Any value becomes text inside an f-string &mdash; no <code>str()</code> needed."],
+  ['f"{3.0}"', "'3.0'", "With no format spec you get Python's own repr, floats and all."],
+  ['f"{2 + 3}"', "'5'", "The braces hold an <b>expression</b>, which is evaluated first."]
+];
+
+const BUGS = [
+  [['first = input("First: ")', 'second = input("Second: ")', "print((first + second) / 2)"],
+   [0, 1],
+   "Lines 1 and 2 are missing <code>float()</code>, so line 3 tries to divide a string. Either line is the right answer &mdash; the fix belongs at the input, not at the division."],
+
+  [['first = float(input("First: "))', 'second = float(input("Second: "))', "average = first + second / 2", "print(average)"],
+   [2],
+   "Line 3 needs brackets: <code>(first + second) / 2</code>. As written, <code>/</code> runs first and the answer is silently wrong."],
+
+  [["total = 0", "for value in [3, 7, 11]:", "    total = value", "print(total)"],
+   [2],
+   "Line 3 overwrites the accumulator. It should be <code>total = total + value</code>."],
+
+  [["numbers = [4, 8, 15]", "total = 0", "for value in numbers:", "    total = total + value", "average = total / 2"],
+   [4],
+   "Line 5 hard-codes 2 when there are 3 numbers. Use <code>len(numbers)</code> so the code cannot disagree with the data."],
+
+  [['mark = float(input("Mark: "))', "if mark = 100:", '    print("Perfect!")'],
+   [1],
+   "Line 2 uses <code>=</code> (store) where it needs <code>==</code> (compare). SyntaxError."],
+
+  [["values = []", "total = 0", "for value in values:", "    total = total + value", "print(total / len(values))"],
+   [4],
+   "Line 5 divides by zero when the list is empty. Guard it with <code>if len(values) == 0:</code> first."],
+
+  [["sum = 0", "for value in [1, 2, 3]:", "    sum = sum + value", "print(sum([4, 5]))"],
+   [0],
+   "Line 1 shadows the built-in <code>sum()</code>, so line 4 fails with <i>'int' object is not callable</i>. Name it <code>total</code>."],
+
+  [['price = float(input("Price: "))', "pence = int(price * 100)", "print(pence)"],
+   [1],
+   "Line 2 truncates: <code>0.99 * 100</code> is stored as 98.99999999999999, so you get 98. Use <code>int(round(price * 100))</code>."]
+];
+
+/* ===================================================================
+   question makers
+   =================================================================== */
+function qType() {
+  const [expr, answer, why] = PICK(TYPES);
+  return {
+    ask: "What is the <b>data type</b> of this expression?",
+    render: "expr", expr: expr,
+    input: "choice", options: TYPE_OPTIONS.slice(), answer: TYPE_OPTIONS.indexOf(answer),
+    why: why, revise: "02_variables_and_types.py"
+  };
+}
+
+function qValue() {
+  const [expr, accept, why] = PICK(VALUES);
+  return {
+    ask: "What is the <b>value</b> of this expression?",
+    hint: "type it exactly as Python would show it &mdash; 3, 3.0 and 3.5 are different answers",
+    render: "expr", expr: expr,
+    input: "free", accept: accept,
+    why: why, revise: "03_operators.py"
+  };
+}
+
+function qTrace() {
+  const [lines, variable, accept, why] = PICK(TRACES);
+  return {
+    ask: "Trace this code. What is the final value of <code>" + esc(variable) + "</code>?",
+    hint: "exactly as Python would show it",
+    render: "code", lines: lines, clickable: false,
+    input: "free", accept: accept,
+    why: why, revise: "01_trace_your_program.py"
+  };
+}
+
+function qCast() {
+  const [expr, answer, why] = PICK(CASTS);
+  const pool = CASTS.map(c => c[1]).filter(a => a !== answer);
+  const c = choice(answer, pool);
+  return {
+    ask: "What does this evaluate to? <code>ValueError</code> means it raises one.",
+    render: "expr", expr: expr,
+    input: "choice", options: c.options, answer: c.answer,
+    why: why, revise: "05_safe_input.py"
+  };
+}
+
+function qFormat() {
+  const [expr, answer, why] = PICK(FORMATS);
+  const pool = FORMATS.map(f => f[1]).filter(a => a !== answer);
+  const c = choice(answer, pool);
+  return {
+    ask: "What string does this f-string produce?",
+    render: "expr", expr: expr,
+    input: "choice", options: c.options, answer: c.answer,
+    why: why, revise: "04_input_output.py"
+  };
+}
+
+function qBug() {
+  const [lines, answers, why] = PICK(BUGS);
+  return {
+    ask: "Exactly one thing is wrong here. <b>Click the line</b> that causes it.",
+    render: "code", lines: lines, clickable: true,
+    input: "line", lineAnswers: answers,
+    why: why, revise: "08_pitfalls.py"
+  };
+}
+
+const DRILLS = [
+  { id: "type", chip: "drill 1", name: "Name That Type", n: 8, make: qType,
+    blurb: "int, float, str or bool? The distinction that decides what + does." },
+  { id: "value", chip: "drill 2", name: "Predict The Value", n: 8, make: qValue,
+    blurb: "Work out the answer in your head. / and // and % and precedence." },
+  { id: "trace", chip: "drill 3", name: "Trace The Code", n: 7, make: qTrace,
+    blurb: "Follow a loop line by line and name the final value." },
+  { id: "cast", chip: "drill 4", name: "Will It Convert?", n: 7, make: qCast,
+    blurb: "Which casts succeed, which raise ValueError, and what you get." },
+  { id: "format", chip: "drill 5", name: "Format It", n: 6, make: qFormat,
+    blurb: "f-strings and format specifiers, to two decimal places." },
+  { id: "bug", chip: "drill 6", name: "Spot The Bug", n: 7, make: qBug,
+    blurb: "One broken line per program. Find it before the examiner does." },
+  { id: "boss", chip: "all six", name: "Boss Run", n: 14, make: null,
+    blurb: "Fourteen questions drawn from every drill above, shuffled." }
+];
+
+const byId = id => DRILLS.filter(d => d.id === id)[0];
+
+function buildRun(id) {
+  if (id === "boss") {
+    const makers = DRILLS.filter(d => d.make).map(d => d.make);
+    const run = [];
+    for (let i = 0; i < 14; i++) run.push(makers[i % makers.length]());
+    return SHUF(run);
+  }
+  const d = byId(id);
+  const run = [];
+  for (let i = 0; i < d.n; i++) run.push(d.make());
+  return run;
+}
+
+/* ===================================================================
+   state
+   =================================================================== */
+const S = {
+  mode: null, qs: [], qi: 0, score: 0, streak: 0, bestStreak: 0,
+  lives: 3, correct: 0, answered: 0, misses: {}, locked: false, over: false
+};
+let PROG = {};
+let DB = null;
+
+const mult = () => Math.min(1 + Math.floor(S.streak / 2), 3);
+
+/* ===================================================================
+   painting
+   =================================================================== */
+function paintMenu() {
+  const host = el("drills");
+  host.innerHTML = "";
+  for (const d of DRILLS) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "drill" + (d.id === "boss" ? " boss" : "");
+    const p = PROG[d.id];
+    b.innerHTML =
+      '<span class="chip">' + esc(d.chip) + "</span>" +
+      "<h3>" + esc(d.name) + "</h3>" +
+      "<p>" + esc(d.blurb) + "</p>" +
+      '<span class="best">' +
+      (p && p.plays
+        ? "best " + p.best + " · " + p.acc + "% accurate · " + p.plays + (p.plays === 1 ? " run" : " runs")
+        : "not played yet") +
+      "</span>";
+    b.addEventListener("click", () => startRun(d.id));
+    host.appendChild(b);
+  }
+}
+
+function paintGauges() {
+  el("g-score").textContent = S.score;
+  el("g-streak").textContent = "×" + mult();
+  const lv = el("g-lives");
+  lv.innerHTML = "";
+  for (let i = 0; i < 3; i++) {
+    const s = document.createElement("span");
+    s.className = "life" + (i < 3 - S.lives ? " spent" : "");
+    lv.appendChild(s);
+  }
+}
+
+/* a small Python highlighter for the slabs */
+const KW = /\b(def|for|in|if|elif|else|while|return|print|input|len|range|append|int|float|str|bool|round|not|and|or|break|continue|True|False|None)\b/g;
+function hl(line) {
+  return esc(line)
+    .replace(/"[^"]*"|'[^']*'/g, m => '<span class="st">' + m + "</span>")
+    .replace(KW, '<span class="kw">$1</span>')
+    .replace(/\b\d+\.?\d*\b/g, '<span class="nu">$&</span>');
+}
+
+function exprSlab(expr) {
+  const box = document.createElement("div");
+  box.className = "expr";
+  box.innerHTML = hl(expr) + '<span class="cursor"></span>';
+  return box;
+}
+
+function codeBlock(lines, clickable) {
+  const pre = document.createElement("pre");
+  pre.className = "code";
+  lines.forEach((line, i) => {
+    const node = document.createElement(clickable ? "button" : "div");
+    node.className = "cline";
+    if (clickable) { node.type = "button"; node.dataset.i = String(i); }
+    node.innerHTML = '<span class="n">' + (i + 1) + "</span><span>" + hl(line) + "</span>";
+    pre.appendChild(node);
+  });
+  return pre;
+}
+
+function optionList(q) {
+  const wrap = document.createElement("div");
+  wrap.className = "opts";
+  q.options.forEach((text, i) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "opt";
+    b.dataset.i = String(i);
+    b.textContent = text;
+    wrap.appendChild(b);
+  });
+  return wrap;
+}
+
+function typeIn(q) {
+  const wrap = document.createElement("div");
+  wrap.className = "typein";
+  const label = document.createElement("label");
+  label.htmlFor = "p-type";
+  label.innerHTML = q.hint ? q.hint : "your answer";
+  const input = document.createElement("input");
+  input.type = "text";
+  input.id = "p-type";
+  input.autocomplete = "off";
+  input.spellcheck = false;
+  input.placeholder = "e.g. 3.5";
+  const go = document.createElement("button");
+  go.type = "button";
+  go.className = "act";
+  go.id = "p-check";
+  go.textContent = "Check";
+  wrap.appendChild(label);
+  wrap.appendChild(input);
+  wrap.appendChild(go);
+  return wrap;
+}
+
+function paintQuestion() {
+  const q = S.qs[S.qi];
+  S.locked = false;
+  el("p-count").textContent = (S.qi + 1) + " / " + S.qs.length;
+  el("p-ask").innerHTML = q.ask;
+  el("p-fb").innerHTML = "";
+  const stage = el("p-stage"), answer = el("p-answer");
+  stage.innerHTML = ""; answer.innerHTML = "";
+
+  if (q.render === "expr") stage.appendChild(exprSlab(q.expr));
+  else stage.appendChild(codeBlock(q.lines, q.clickable));
+
+  if (q.input === "choice") {
+    answer.appendChild(optionList(q));
+    answer.querySelectorAll(".opt").forEach(b =>
+      b.addEventListener("click", () => judgeChoice(Number(b.dataset.i))));
+  } else if (q.input === "free") {
+    answer.appendChild(typeIn(q));
+    const input = el("p-type");
+    el("p-check").addEventListener("click", () => judgeFree(input.value));
+    input.addEventListener("keydown", e => {
+      if (e.key === "Enter") { e.preventDefault(); judgeFree(input.value); }
+    });
+    input.focus();
+  } else {
+    stage.querySelectorAll("button.cline").forEach(b =>
+      b.addEventListener("click", () => judgeLine(Number(b.dataset.i))));
+  }
+}
+
+/* ===================================================================
+   judging
+   =================================================================== */
+function award(ok, q) {
+  S.answered++;
+  let gained = 0, used = 1;
+  if (ok) {
+    used = mult();                 /* the multiplier THIS answer earned */
+    gained = 10 * used;
+    S.score += gained;
+    S.streak++;
+    if (S.streak > S.bestStreak) S.bestStreak = S.streak;
+    S.correct++;
+  } else {
+    S.lives--;
+    S.streak = 0;
+    S.misses[q.revise] = (S.misses[q.revise] || 0) + 1;
+  }
+  paintGauges();
+  feedback(ok, q, gained, used);
+}
+
+function shownAnswer(q) {
+  if (q.input === "choice") return q.options[q.answer];
+  if (q.input === "free") return q.accept.join(" or ");
+  return "line " + q.lineAnswers.map(i => i + 1).join(" or ");
+}
+
+function feedback(ok, q, gained, used) {
+  const box = document.createElement("div");
+  box.className = "fb " + (ok ? "ok" : "no");
+  box.innerHTML =
+    '<div class="verdict">' +
+    (ok ? "Correct &nbsp;+" + gained + (used > 1 ? " (×" + used + " streak)" : "")
+        : "Not this time &mdash; the answer is " + esc(shownAnswer(q))) +
+    "</div><p>" + q.why + "</p>" +
+    '<span class="src">revise: a1_1_fundamentals/' + esc(q.revise) + "</span>";
+  const next = document.createElement("button");
+  next.type = "button";
+  next.className = "act";
+  next.style.marginTop = "13px";
+  next.id = "p-next";
+  const last = S.qi === S.qs.length - 1 || S.lives === 0;
+  next.textContent = last ? "See results" : "Next question";
+  next.addEventListener("click", advance);
+  box.appendChild(next);
+  el("p-fb").innerHTML = "";
+  el("p-fb").appendChild(box);
+  next.focus();
+}
+
+function judgeChoice(i) {
+  if (S.locked) return;
+  S.locked = true;
+  const q = S.qs[S.qi];
+  const ok = i === q.answer;
+  el("p-answer").querySelectorAll(".opt").forEach(b => {
+    const bi = Number(b.dataset.i);
+    b.disabled = true;
+    if (bi === q.answer) b.classList.add("right");
+    else if (bi === i) b.classList.add("wrong");
+  });
+  award(ok, q);
+}
+
+function judgeFree(raw) {
+  if (S.locked) return;
+  const text = String(raw).trim();
+  if (text === "") { el("p-type").focus(); return; }
+  S.locked = true;
+  const q = S.qs[S.qi];
+  const ok = q.accept.map(norm).indexOf(norm(text)) !== -1;
+  const input = el("p-type");
+  input.disabled = true;
+  el("p-check").disabled = true;
+  input.classList.add(ok ? "right" : "wrong");
+  input.classList.add(ok ? "pop" : "shake");
+  award(ok, q);
+}
+
+function judgeLine(i) {
+  if (S.locked) return;
+  S.locked = true;
+  const q = S.qs[S.qi];
+  const ok = q.lineAnswers.indexOf(i) !== -1;
+  el("p-stage").querySelectorAll("button.cline").forEach(b => {
+    const bi = Number(b.dataset.i);
+    b.disabled = true;
+    if (q.lineAnswers.indexOf(bi) !== -1) b.classList.add("right");
+    else if (bi === i) b.classList.add("wrong");
+  });
+  award(ok, q);
+}
+
+function advance() {
+  if (S.lives === 0 || S.qi === S.qs.length - 1) { finish(); return; }
+  S.qi++;
+  paintQuestion();
+}
+
+/* ===================================================================
+   run lifecycle
+   =================================================================== */
+function startRun(id) {
+  S.mode = id; S.qs = buildRun(id); S.qi = 0; S.score = 0;
+  S.streak = 0; S.bestStreak = 0; S.lives = 3;
+  S.correct = 0; S.answered = 0; S.misses = {}; S.over = false; S.locked = false;
+  show("menu", false); show("results", false); show("play", true); show("gauges", true);
+  el("p-name").textContent = byId(id).name;
+  paintGauges();
+  paintQuestion();
+}
+
+function rankFor(acc, outOfLives) {
+  if (outOfLives) return "Out of lives";
+  if (acc === 100) return "Perfect run";
+  if (acc >= 80) return "Strong";
+  if (acc >= 55) return "Getting there";
+  return "Needs another pass";
+}
+
+function finish() {
+  S.over = true;
+  const acc = S.answered ? Math.round((100 * S.correct) / S.answered) : 0;
+  show("play", false); show("gauges", false); show("results", true);
+  el("r-rank").textContent = rankFor(acc, S.lives === 0);
+  el("r-score").textContent = S.score;
+
+  el("r-tiles").innerHTML =
+    tile("Correct", S.correct + " / " + S.answered) +
+    tile("Accuracy", acc + "%") +
+    tile("Best streak", S.bestStreak) +
+    tile("Lives left", S.lives);
+
+  const files = Object.keys(S.misses).sort((a, b) => S.misses[b] - S.misses[a]);
+  const review = el("r-review");
+  if (files.length) {
+    review.innerHTML =
+      '<h3 style="margin:18px 0 0;font-size:13px;letter-spacing:.09em;' +
+      'text-transform:uppercase;color:var(--ink-soft)">Go and re-read</h3>' +
+      '<ul class="review">' +
+      files.map(f =>
+        "<li><span class=\"tally\">" + S.misses[f] + "&times;</span>" +
+        '<span><span class="file">a1_1_fundamentals/' + esc(f) + "</span></span></li>"
+      ).join("") +
+      "</ul>";
+  } else if (S.answered) {
+    review.innerHTML =
+      '<p style="font-size:14px;line-height:1.6;margin:16px 0 0">Nothing missed. ' +
+      "Try the Boss Run, then move on to the lists unit.</p>";
+  } else {
+    review.innerHTML = "";
+  }
+
+  saveRun(acc);
+}
+
+const tile = (k, v) =>
+  '<div class="tile"><div class="k">' + esc(k) + '</div><div class="v">' + esc(v) + "</div></div>";
+
+/* ===================================================================
+   progress — db capability, with the page fully playable without it
+   =================================================================== */
+async function loadProgress() {
+  try {
+    if (typeof claude === "undefined" || !claude.use) return;
+    DB = await claude.use("db");
+    if (!DB) return;
+    const snap = await DB.collection("progress").get();
+    snap.docs.forEach(doc => {
+      const d = doc.data() || {};
+      PROG[doc.id] = {
+        best: Number(d.best) || 0,
+        plays: Number(d.plays) || 0,
+        acc: Number(d.acc) || 0,
+        misses: d.misses && typeof d.misses === "object" ? d.misses : {}
+      };
+    });
+    paintMenu();
+  } catch (e) { DB = null; }
+}
+
+async function saveRun(acc) {
+  const note = el("r-saved");
+  const prev = PROG[S.mode] || { best: 0, plays: 0, acc: 0, misses: {} };
+  const merged = {};
+  for (const k of Object.keys(prev.misses || {})) merged[k] = prev.misses[k];
+  for (const k of Object.keys(S.misses)) merged[k] = (merged[k] || 0) + S.misses[k];
+  const next = {
+    best: Math.max(prev.best, S.score),
+    plays: prev.plays + 1,
+    acc: Math.max(prev.acc, acc),
+    misses: merged
+  };
+  PROG[S.mode] = next;
+  paintMenu();
+
+  if (!DB) {
+    note.textContent = "Progress is not being saved in this view — sign in to keep your best scores.";
+    return;
+  }
+  try {
+    await DB.doc("progress/" + S.mode).set({
+      mode: S.mode, best: next.best, plays: next.plays, acc: next.acc,
+      misses: next.misses, lastScore: S.score, lastAccuracy: acc,
+      lastAt: new Date().toISOString()
+    });
+    note.textContent = next.best === S.score && S.score > 0
+      ? "New best for this drill: " + S.score + ". Saved."
+      : "Saved. Best for this drill: " + next.best + ".";
+  } catch (e) {
+    note.textContent = "Could not save this run, but your score above still stands.";
+  }
+}
+
+/* ===================================================================
+   boot
+   =================================================================== */
+function toMenu() {
+  show("play", false); show("results", false); show("gauges", false); show("menu", true);
+}
+
+el("p-quit").addEventListener("click", () => { if (S.answered) finish(); else toMenu(); });
+el("r-menu").addEventListener("click", toMenu);
+el("r-again").addEventListener("click", () => startRun(S.mode));
+
+paintMenu();
+loadProgress();
+
+/* keep a run alive across a republish */
+const hot = window.claude && window.claude.hot;
+if (hot) {
+  hot.snapshot(() => ({ prog: PROG }));
+  const start = data => {
+    if (data && data.prog) { PROG = data.prog; paintMenu(); }
+  };
+  hot.ready ? hot.ready(start) : start(hot.data || {});
+}
+</script>
